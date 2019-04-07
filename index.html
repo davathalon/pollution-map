@@ -1,0 +1,184 @@
+<!DOCTYPE HTML>
+<html>
+  <head>
+    <title>Desmog | Map Editor</title>
+    <link rel="stylesheet" href="static/graph-creator.css" />
+    <link rel="stylesheet" href="static/jquery-ui.css">
+    <style>
+      body {
+        font-family:arial,sans-serif;
+      }
+      body.loading * {
+        cursor:wait !important;
+      }
+      svg {
+          cursor: move;
+          cursor: grab;
+          cursor: -moz-grab;
+          cursor: -webkit-grab;
+      }
+      svg path, svg circle, svg image {
+        cursor:default;
+      }
+      body.dragging svg {
+        cursor: grabbing;
+        cursor: -moz-grabbing;
+        cursor: -webkit-grabbing;
+      }
+
+      .ui-autocomplete-loading {
+        background: white url("images/load.gif") right 10px center no-repeat;
+      }
+      #node_search_text {
+        padding: 3px;
+        font-size: 24px;
+        border-radius: 4px;
+        width:100%;
+        box-sizing:border-box;
+      }
+      #adder .card .name {
+        margin-bottom:5px
+      }
+      #adder .card img {
+        max-height:200px;max-width:100%;
+        border-radius:3px;
+      }
+      #adder .card .colorpicker, #adder .card.noimg img {
+        display:none;
+      }
+      #adder .card.noimg .colorpicker {
+        display:block;
+      }
+      #dclick_prompt {
+        position:absolute;
+        top:45%;
+        width:100%;
+        text-align:center;
+        font-size:27px;
+        font-weight:bold;
+        color:#cecece;
+        pointer-events:none;
+      }
+      .subtitle {
+        font-size:15px;
+        color:#666;
+      }
+      .myButton {
+      	-moz-box-shadow:inset 0px 1px 0px 0px #54a3f7;
+      	-webkit-box-shadow:inset 0px 1px 0px 0px #54a3f7;
+      	box-shadow:inset 0px 1px 0px 0px #54a3f7;
+      	background:-webkit-gradient(linear, left top, left bottom, color-stop(0.05, #007dc1), color-stop(1, #0061a7));
+      	background:-moz-linear-gradient(top, #007dc1 5%, #0061a7 100%);
+      	background:-webkit-linear-gradient(top, #007dc1 5%, #0061a7 100%);
+      	background:-o-linear-gradient(top, #007dc1 5%, #0061a7 100%);
+      	background:-ms-linear-gradient(top, #007dc1 5%, #0061a7 100%);
+      	background:linear-gradient(to bottom, #007dc1 5%, #0061a7 100%);
+      	filter:progid:DXImageTransform.Microsoft.gradient(startColorstr='#007dc1', endColorstr='#0061a7',GradientType=0);
+      	background-color:#007dc1;
+      	-moz-border-radius:3px;
+      	-webkit-border-radius:3px;
+      	border-radius:3px;
+      	border:1px solid #124d77;
+      	display:inline-block;
+      	cursor:pointer;
+      	color:#ffffff;
+      	font-family:Arial;
+      	font-size:13px;
+      	padding:6px 24px;
+      	text-decoration:none;
+      	text-shadow:0px 1px 0px #154682;
+      }
+      .myButton:hover {
+      	background:-webkit-gradient(linear, left top, left bottom, color-stop(0.05, #0061a7), color-stop(1, #007dc1));
+      	background:-moz-linear-gradient(top, #0061a7 5%, #007dc1 100%);
+      	background:-webkit-linear-gradient(top, #0061a7 5%, #007dc1 100%);
+      	background:-o-linear-gradient(top, #0061a7 5%, #007dc1 100%);
+      	background:-ms-linear-gradient(top, #0061a7 5%, #007dc1 100%);
+      	background:linear-gradient(to bottom, #0061a7 5%, #007dc1 100%);
+      	filter:progid:DXImageTransform.Microsoft.gradient(startColorstr='#0061a7', endColorstr='#007dc1',GradientType=0);
+      	background-color:#0061a7;
+      }
+      .myButton:active {
+      	position:relative;
+      	top:1px;
+      }
+      svg text {
+        font-size:16px;
+        font-weight:bold;
+      }
+      svg .conceptG.img text {
+        text-shadow: 0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 4px white;
+      }
+      svg .conceptG.img text {
+        visibility:hidden;
+      }
+      svg .conceptG.img:hover text {
+        visibility:visible;
+      }
+      svg .conceptG.img:hover image {
+        opacity:0.75;
+      }
+      g.conceptG.clr:hover circle.over {
+        opacity:0.92;
+      }
+    </style>
+    <script src="static/jquery-1.10.2.js"></script>
+    <script src="static/jquery-ui.js"></script>
+    <script src="static/sweetalert2.js"></script>
+    <script>
+      var db = console.log;
+    </script>
+  </head>
+
+  <body>
+
+    <div style="height:100%">
+
+      <div id="dclick_prompt">Double-click to add a Node</div>
+
+      <div id="toolbox" style="display:none">
+        <input type="file" id="hidden-file-upload"><input id="upload-input" type="image" title="upload graph" src="images/upload-icon.png" alt="upload graph"> <input type="image" id="download-input" title="download graph" src="images/download-icon.png" alt="download graph"> <input type="image" id="delete-graph" title="delete graph" src="images/trash-icon.png" alt="delete graph">
+      </div>
+
+      <div id="overlay" style="display:none;position:absolute;top:0;left:0;width:100%;height:100%;z-index:10">
+        <div style="position:absolute;width:300px;height:100%;background:rgba(256,256,256,0.97);z-index:1;box-shadow:2px 0px 5px #999">
+          <div style="padding:20px;">
+
+            <div id="adder">
+
+              <div class="subtitle" style="margin-bottom:5px;">Search for a name:</div>
+              <input id="node_search_text" type="text">
+
+              <div class="card" style="display:none;font-size:20px;margin-top:20px;">
+                <div class="name"></div>
+                <img src="#">
+                <div class="colorpicker">
+                  <div class="subtitle" style="font-style:italic;margin-bottom:4px">
+                    No image - select a colour:
+                  </div>
+                  <input id="colouriser" type="color" value="#f6fbff" style="width:100%;height:100px">
+                </div>
+                <input id="nodeChosenButton" class="myButton" type="button" value="Add to Map" style="display:block;margin-top:10px">
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+
+        <div class="cover" style="position:absolute;cursor:alias;left:0;width:100%;top:0;height:100%;background:black;opacity:0.15;"></div>
+
+      </div>
+
+      <script src="static/d3.v4.js" charset="utf-8"></script>
+      <script src="static/LsDataSource.js"></script>
+
+      <script src="static/graph-creator-dv4.js"></script>
+
+      <img src="images/logo.png" style="position:absolute;right:20px;bottom:20px;width:240px;">
+
+    </div>
+
+  </body>
+
+</html>
