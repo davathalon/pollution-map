@@ -50,6 +50,7 @@
         display:block;
       }
       #dclick_prompt {
+        display:none;
         position:absolute;
         top:45%;
         width:100%;
@@ -112,14 +113,23 @@
       svg .conceptG.img text {
         visibility:hidden;
       }
-      svg .conceptG.img:hover text {
+      body:not(.brushing) svg .conceptG.img:hover text {
         visibility:visible;
       }
-      svg .conceptG.img:hover image {
+      body:not(.brushing) svg .conceptG.img:hover image {
         opacity:0.75;
       }
-      g.conceptG.clr:hover circle.over {
+      body:not(.brushing) g.conceptG.clr:hover circle.over {
         opacity:0.92;
+      }
+      body.brush .conceptG circle {
+        cursor:cell;
+      }
+      body.brush .conceptG.selected circle {
+        cursor:default;
+      }
+      body.brushing path, body.brushing circle  {
+        cursor: crosshair !important;
       }
     </style>
     <script src="static/jquery-1.10.2.js"></script>

@@ -69,13 +69,14 @@ g.selected circle{
 
 path.link {
     fill: none;
-    stroke: #333;
     stroke-width: 6px;
     cursor: default;
 }
-
 path.link:hover{
     stroke: rgb(94, 196, 204);
+}
+path.link, body.brushing path.link:hover {
+  stroke: #333;
 }
 
 g.connect-node circle{
