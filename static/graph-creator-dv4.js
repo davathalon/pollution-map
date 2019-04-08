@@ -944,7 +944,9 @@ document.onload = (function(d3, undefined){
     if (!data || JSON.parse(data).nodes.length==0) data = thisGraph.defaultData();
     var jsonObj = JSON.parse(data);
     if (!jsonObj) return;
-    thisGraph.nodes = jsonObj.nodes;
+    thisGraph.nodes = jsonObj.nodes.filter(function(n) {
+      return !n.staging;
+    });
     var newEdges = jsonObj.edges;
     newEdges.forEach(function(e, i){
       newEdges[i] = {
