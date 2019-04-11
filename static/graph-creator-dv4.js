@@ -10,11 +10,7 @@ document.onload = (function(d3, undefined){
     thisGraph.edges = [];
 
     thisGraph.state = {
-      selectedNode: null,
       selectedEdge: null,
-      stagingNode: null,
-      stagingNodeData: null,
-      awaitingStagingNodeData: false,
       mouseDownNode: null,
       mouseDownPos: null,
       transform: null,
@@ -27,6 +23,8 @@ document.onload = (function(d3, undefined){
       currentTargetNode: null // when mouseover set the current targetNode
     };
 
+    thisGraph.overlay = thisGraph.Overlay();
+
     // define arrow markers for graph links
     var defs = svg.append('svg:defs');
     defs.append('svg:marker')
@@ -38,6 +36,28 @@ document.onload = (function(d3, undefined){
       .attr('orient', 'auto')
       .append('svg:path')
       .attr('d', 'M0,-5L10,0L0,5');
+
+    defs.append('svg:marker')
+      .attr('id', 'end-arrow-selected')
+      .attr('viewBox', '0 -5 10 10')
+      .attr('refX', "32")
+      .attr('markerWidth', 3.5)
+      .attr('markerHeight', 3.5)
+      .attr('orient', 'auto')
+      .append('svg:path')
+      .attr('d', 'M0,-5L10,0L0,5')
+      .style("fill", "#1284e4");
+
+    defs.append('svg:marker')
+      .attr('id', 'end-arrow-hover')
+      .attr('viewBox', '0 -5 10 10')
+      .attr('refX', "32")
+      .attr('markerWidth', 3.5)
+      .attr('markerHeight', 3.5)
+      .attr('orient', 'auto')
+      .append('svg:path')
+      .attr('d', 'M0,-5L10,0L0,5')
+      .style("fill", "#888");
 
     // define arrow markers for leading arrow
     defs.append('svg:marker')
@@ -68,6 +88,7 @@ document.onload = (function(d3, undefined){
 
     thisGraph.brush = thisGraph.buildBrush();
     thisGraph.svgG.append("g").attr('class', 'paths');
+    thisGraph.svgG.append("g").attr('class', 'pathsShadow');
     thisGraph.svgG.append("g").attr('class', 'circles');
 
 
@@ -160,9 +181,12 @@ document.onload = (function(d3, undefined){
       },
       start: function() {
         $("body").toggleClass("brushing", true);
+        thisGraph.removeSelectFromEdge();
       },
       show: function(b) {
-        $("body").toggleClass("brush", b!==false);
+        var in_brush_mode = b!==false;
+        $("body").toggleClass("brush", in_brush_mode);
+        thisGraph.state.ctrlDown = in_brush_mode;
         self.brush.call(self.brusher.extent(function() {
           return b===false ? [[0,0], [0,0]] : [[-10000,-10000], [10000,10000]];
         }));
@@ -170,7 +194,7 @@ document.onload = (function(d3, undefined){
       go: function() {
         if (d3.event.sourceEvent.type !== "end") {
           var selection = d3.event.selection;
-          thisGraph.circles.classed("selected", function(d) {
+          thisGraph.setSelected(thisGraph.circles, function(d) {
             var s = d3.select(this).classed("selected") ||
                 (selection != null
                 && selection[0][0] <= d.x && d.x < selection[1][0]
@@ -209,150 +233,16 @@ document.onload = (function(d3, undefined){
   GraphCreator.prototype.initDom = function() {
     var thisGraph = this;
 
-    (function() { /*Add Node Autocompleter*/
-      var self = {
-        waiting: false,
-        init: function() {
-          var searchbox = $( "#node_search_text" );
-          searchbox
-            .on("keydown", function(e) {
-              if (e.key.length == 1) { //indicates a printable character was pressed
-                searchbox.autocomplete("close");
-                if (searchbox.val().length>=1) {
-                  searchbox.toggleClass("ui-autocomplete-loading", true); //simulate searching immediately for feedback, but actually have a delay, as it's an expensive call
-                }
-              }
-              if (e.keyCode == thisGraph.consts.ENTER_KEY){
-                self.waiting = true;
-              }
-            })
-            .autocomplete({
-            autoFocus: true,
-            delay: 750,
-            source: function( request, response ) {
-              LsDataSource.findNodes( request.term, function(data) {
-                if (!data) {
-                  response([]);
-                  return thisGraph.ajaxError();
-                }
-                function similarity(s1, s2) {
-                  var longer = s1;
-                  var shorter = s2;
-                  if (s1.length < s2.length) {
-                    longer = s2;
-                    shorter = s1;
-                  }
-                  var longerLength = longer.length;
-                  if (longerLength == 0) {
-                    return 1.0;
-                  }
-                  return (longerLength - editDistance(longer, shorter)) / parseFloat(longerLength);
-                }
-                function editDistance(s1, s2) {
-                  s1 = s1.toLowerCase();
-                  s2 = s2.toLowerCase();
-
-                  var costs = new Array();
-                  for (var i = 0; i <= s1.length; i++) {
-                    var lastValue = i;
-                    for (var j = 0; j <= s2.length; j++) {
-                      if (i == 0)
-                        costs[j] = j;
-                      else {
-                        if (j > 0) {
-                          var newValue = costs[j - 1];
-                          if (s1.charAt(i - 1) != s2.charAt(j - 1))
-                            newValue = Math.min(Math.min(newValue, lastValue),
-                              costs[j]) + 1;
-                          costs[j - 1] = lastValue;
-                          lastValue = newValue;
-                        }
-                      }
-                    }
-                    if (i > 0)
-                      costs[s2.length] = lastValue;
-                  }
-                  return costs[s2.length];
-                }
-                function compare(a,b) {
-                  var sa = similarity(a.display.name, request.term);
-                  var sb = similarity(b.display.name, request.term);
-                  if (sa>sb) {
-                    return -1;
-                  } else if (sa<sb) {
-                    return 1;
-                  } else {
-                    if (a.display.image && !b.display.image) {
-                      return -1;
-                    } else if (!a.display.image && b.display.image) {
-                      return 1;
-                    }
-                    return 0;
-                  }
-                }
-                data.sort(compare);
-
-                var out = [];
-                for (var i in data) {
-                  out.push({
-                    value: data[i].display.name,
-                    data: data[i]
-                  });
-                }
-
-                if (!self.waiting) {
-                  response( out );
-                } else {
-                  response([]);
-                  if (request.term==searchbox.val()) {
-                    self.selected(data[0]);
-                  }
-                }
-              });
-            },
-            minLength: 2,
-            search: function() {
-            //  $( "#node_search_text" ).autocomplete("close");
-            },
-            select: function( event, ui ) {
-              var data = ui.item.data;
-              self.selected(data);
-            }
-          });
-        },
-        selected: function(data) {
-          self.waiting = false;
-          if (!data) return;
-          thisGraph.prepareStagingNode(data);
-          $("#adder .card .name").text( data.display.name );
-          if (data.display.image) {
-            $("#adder .card img").replaceWith($("<img src='"+data.display.image+"'>"));
-            $("#adder .card").removeClass("noimg");
-          } else {
-            $("#adder .card").addClass("noimg");
-          }
-          $("#adder .card").show();
-          $("#adder .card input").focus();
-          setTimeout(function() { $("#node_search_text").val(""); }, 1);
-        }
+    $(document).on("contextmenu", function (e) {
+      if (thisGraph.state.ctrlDown) {
+        e.preventDefault();
+        return false;
       }
-      self.init();
-    })();
-
-    $( "#nodeChosenButton" ).on("click", function(){
-      thisGraph.nodeChosen();
     });
 
-    $( "#overlay .cover" ).on("click", function() {
-      $("#overlay").hide();
-      thisGraph.deleteNode(thisGraph.getStagingNode());
-      thisGraph.updateGraph();
+    $(window).focus(function(e) {
+      thisGraph.brush.show(false);
     });
-
-    document.oncontextmenu = function (e) {
-       e.preventDefault();
-       return false;
-    }
 
     /*window.onbeforeunload = function(){
       return "Make sure to save your graph locally before leaving :-)";
@@ -382,8 +272,12 @@ document.onload = (function(d3, undefined){
         state = thisGraph.state;
 
     var d3Path = d3.select("svg").select(".paths").selectAll("path");
-
     thisGraph.paths = d3Path.data(thisGraph.edges, function(d){
+      return String(d.source.id) + "+" + String(d.target.id);
+    });
+
+    var d3PathShadow = d3.select("svg").select(".pathsShadow").selectAll("path");
+    thisGraph.pathsShadow = d3PathShadow.data(thisGraph.edges, function(d){
       return String(d.source.id) + "+" + String(d.target.id);
     });
 
@@ -392,37 +286,59 @@ document.onload = (function(d3, undefined){
     //   return String(d.source.id) + "+" + String(d.target.id);
     // });
     var paths = thisGraph.paths;
+    var pathsShadow = thisGraph.pathsShadow;
 
     // add new paths
     var enter = paths.enter()
       .append("path")
-      .style('marker-end','url(#end-arrow)')
       .classed("link", true)
       .attr("d", this.edge_svg)
+      .attr("id", function(d) {
+        return "Path_"+d.source.id + "_" + d.target.id;
+      });
+
+    function getSisterPath(d) {
+      return d3.select("#Path_"+d.source.id + "_" + d.target.id);
+    }
+
+    var enter = pathsShadow.enter()
+      .append("path")
+      .classed("link", true)
+      .attr("d", this.edge_svg)
+      .on("mouseover", function(d) {
+        getSisterPath(d).classed("hovered", true);
+      })
+      .on("mouseout", function(d) {
+        getSisterPath(d).classed("hovered", false);
+      })
       .on("mousedown", function(d){
-        thisGraph.pathMouseDown.call(thisGraph, d3.select(this), d);
+        thisGraph.pathMouseDown.call(thisGraph, getSisterPath(d), d);
       })
       .on("mouseup", function(d){
-        console.log("path mouse up : ",  d3.select(this).node());
+        console.log("path mouse up : ",  getSisterPath(d).node());
         state.mouseDownLink = null;
       });
 
     // update existing paths
-    paths.style('marker-end', 'url(#end-arrow)')
+    paths
       .classed(consts.selectedClass, function(d){
         return d === state.selectedEdge;
       })
       .attr("d", this.edge_svg);
 
+    pathsShadow
+      .attr("d", this.edge_svg);
+
     // remove old links
     paths.exit().remove();
+    pathsShadow.exit().remove();
 
 
     // update existing nodes
     var d3Circles = d3.select("svg").select(".circles").selectAll("g");
     // update existing nodes
     thisGraph.circles = d3Circles.data(thisGraph.nodes, function(d){ return "Node"+d.id;});
-    thisGraph.circles.attr("transform", function(d){return "translate(" + d.x + "," + d.y + ")";});
+    thisGraph.circles.attr("transform", thisGraph.nodeTransform);
     var circles = thisGraph.circles;
 
     // add new nodes
@@ -430,13 +346,12 @@ document.onload = (function(d3, undefined){
 
     newGs.classed(consts.circleGClass, true)
       .attr("id", function(d){return "Node"+d.id})
-      .attr("transform", function(d){return "translate(" + d.x + "," + d.y + ")";})
+      .attr("transform", thisGraph.nodeTransform)
       .on("mouseover", function(d){
         console.log('Circle mouseover ', state.shiftNodeDrag);
         state.currentTargetNode = d;
         if (state.shiftNodeDrag){
           d3.select(this).classed(consts.connectClass, true);
-
           console.log('circle Keyset :', d, state.currentTargetNode);
         }
       })
@@ -445,8 +360,8 @@ document.onload = (function(d3, undefined){
       })
       .on("mousedown", function(d){
         console.log('circle mousedown :', this, d);
-        d3.select(this).moveToFront();
         thisGraph.circleMouseDown.call(thisGraph, d3.select(this), d);
+        thisGraph.moveToFront(d);
       })
       .on("mouseup", function(d){
         console.log('circle mouseup :', this, d);
@@ -517,6 +432,8 @@ document.onload = (function(d3, undefined){
     thisGraph.circles.exit().remove();
     thisGraph.save();
 
+    this.info.update(); //often called after deleteNode
+
   };
 
 
@@ -530,10 +447,13 @@ document.onload = (function(d3, undefined){
   GraphCreator.prototype.pathMouseDown = function(d3path, d){
     var thisGraph = this,
         state = thisGraph.state;
+        db("PATH MOUSE DOWN");
     d3.event.stopPropagation();
     state.mouseDownLink = d;
 
     thisGraph.clearSelection();
+
+    //d3Path.classed(thisGraph.consts.selectedClass, true);
 
     var prevEdge = state.selectedEdge;
     if (!prevEdge || prevEdge !== d){
@@ -626,13 +546,15 @@ document.onload = (function(d3, undefined){
         }
 
         if (d3.event.sourceEvent.ctrlKey || thisGraph.state.ctrlDown) {
-          d3node.classed(consts.selectedClass, !d3node.classed(consts.selectedClass));
+          thisGraph.setSelected(d3node, "toggle");
         } else {
           if (thisGraph.getSelected().size()==1 && d3node.classed(consts.selectedClass)) {
-            d3node.classed(consts.selectedClass, false)
+            thisGraph.setSelected(d3node, false);
           } else {
-            thisGraph.clearSelection(2);
-            d3node.classed(consts.selectedClass, true);
+            thisGraph.clearSelection(true);
+            setTimeout(function() {
+              thisGraph.setSelected(d3node, true);
+            }); //Timeout here works with moveToFront to avoid the hover-flicker
           }
         }
       }
@@ -640,8 +562,30 @@ document.onload = (function(d3, undefined){
     state.mouseDownNode = null;
     return;
 
-  }; // end of circles mouseup
+  }
 
+  GraphCreator.prototype.setSelected = function(nodes, b, skip) {
+    var selectClass = this.consts.selectedClass;
+    if (b=="toggle") {
+      nodes.each(function() {
+        var node = d3.select(this);
+        node.classed(selectClass, !node.classed(selectClass));
+      });
+    } else { /* function or boolean*/
+      nodes.classed(selectClass, b);
+    }
+    if (!skip) this.info.update();
+  }
+
+  GraphCreator.prototype.clearSelection = function(skip){
+    this.setSelected(d3.select("svg").select(".circles").selectAll(".conceptG"), false, skip); //e.g. skip if it's known another node about to be selected, so no flicker introduced
+  }
+
+  GraphCreator.prototype.deleteNode = function(node, aboutToAdd) {
+    this.nodes.splice(this.nodes.indexOf(node), 1);
+    if (this.nodes.length==0 && !aboutToAdd) $("#dclick_prompt").show();
+    this.spliceLinksForNode(node);
+  };
 
 /**************************************************************************
 
@@ -817,19 +761,16 @@ document.onload = (function(d3, undefined){
   // dblclick on main svg
   GraphCreator.prototype.svgDoubleClick = function(){
     console.log('svg double click');
+    if (d3.event.target.nodeName!="svg") return;
     $("#dclick_prompt").hide();
-    var xycoords = d3.mouse(this.svgG.node()),
-        d = {id: "New", title: "...", x: xycoords[0], y: xycoords[1], staging:true};
-    this.nodes.push(d);
-    this.updateGraph();
-    this.startAdder();
+    this.adder.newNode();
   }
   // mouseup on main svg
   GraphCreator.prototype.svgMouseUp = function(){
+    if (d3.event.target.nodeName!="svg") return;
     var thisGraph = this, state = thisGraph.state;
-    if (!d3.event.ctrlKey) {
-      db("Clearing selection");
-      this.clearSelection(1);
+    if (!state.ctrlDown) {
+      this.clearSelection();
     }
     console.log('svg mouse up');
     if (state.justScaleTransGraph) {
@@ -843,11 +784,6 @@ document.onload = (function(d3, undefined){
     state.graphMouseDown = false;
   };
 
-  GraphCreator.prototype.clearSelection = function(a){
-    db("clearing "+a);
-    d3.select("svg").select(".circles").selectAll(".conceptG").classed("selected", false);
-  }
-
   // keydown on main svg
   GraphCreator.prototype.svgKeyDown = function() {
     if ($("input").is(":focus")) return;
@@ -860,7 +796,8 @@ document.onload = (function(d3, undefined){
 
     if(state.lastKeyDown !== -1) return; // make sure repeated key presses don't register for each keydown
 
-    var is_ctrl_key =  (d3.event.keyCode==17 || d3.event.keyCode==91); //Command key for Mac, Ctrl elsewhere
+    db(d3.event.keyCode);
+    var is_ctrl_key =  (d3.event.keyCode==17 || d3.event.keyCode==91 || d3.event.keyCode==93); //Command key for Mac, Ctrl elsewhere
 
     if (is_ctrl_key) {
       state.ctrlDown = true;
@@ -872,7 +809,7 @@ document.onload = (function(d3, undefined){
     switch(d3.event.keyCode) {
       case consts.A_KEY:
         if (state.ctrlDown) {
-          d3.select("svg").select(".circles").selectAll(".conceptG").classed("selected", true);
+          thisGraph.setSelected(d3.select("svg").select(".circles").selectAll(".conceptG"), true);
         }
       break;
       case consts.BACKSPACE_KEY:
@@ -941,6 +878,7 @@ document.onload = (function(d3, undefined){
   GraphCreator.prototype.load = function() {
     var thisGraph = this;
     var data = localStorage.getItem("saved_graph");
+    db("Loaded", data);
     if (!data || JSON.parse(data).nodes.length==0) data = thisGraph.defaultData();
     var jsonObj = JSON.parse(data);
     if (!jsonObj) return;
@@ -948,6 +886,7 @@ document.onload = (function(d3, undefined){
       return !n.staging;
     });
     var newEdges = jsonObj.edges;
+
     newEdges.forEach(function(e, i){
       newEdges[i] = {
         source: thisGraph.nodes.filter(function(n){return n.id == e.source;})[0],
@@ -964,6 +903,11 @@ document.onload = (function(d3, undefined){
 
   }
 
+  GraphCreator.prototype.nodeTransform = function(d) {
+    if (!d.scale) d.scale = 1;
+    return "translate(" + d.x + "," + d.y + ") scale("+d.scale+" "+d.scale+")";
+  }
+
   GraphCreator.prototype.setViewport = function(v) {
     this.state.transform = v;
     var zoomExtent = d3.zoom().scaleExtent([v.x, v.y]);
@@ -972,121 +916,452 @@ document.onload = (function(d3, undefined){
   }
 
   GraphCreator.prototype.defaultData = function() {
-    return window.JSON.stringify({"nodes":[{"id":53756,"title":"David Cameron","x":370,"y":135,"image":"https://littlesis.org/images/profile/34/345b8bff6502dace207b886236f9d8521728e340_1273040317.png","dimensions":{"width":185,"height":250}},{"id":67986,"title":"Boris Johnson","x":616,"y":135,"image":"https://littlesis.org/images/profile/4f/4f2ef90eafc8618280e50d564c3efe92.jpg","dimensions":{"width":200,"height":134}},{"id":55778,"title":"Michael Gove","x":931,"y":364,"image":"https://littlesis.org/images/profile/ac/ac60d997b9dc853e6b0929023cea30cb.jpg","dimensions":{"width":150,"height":200}},{"id":163547,"title":"Theresa May","x":609,"y":368,"image":"https://littlesis.org/images/profile/fe/fe61bc575dd06ce517d164f157aac13b.jpg","dimensions":{"width":189,"height":200}},{"id":232409,"title":"Alexander Temerko","x":920,"y":133,"bg_color":"#f6fbff"}],"edges":[{"source":53756,"target":67986},{"source":67986,"target":163547},{"source":67986,"target":163547},{"source":55778,"target":163547},{"source":163547,"target":232409},{"source":232409,"target":67986}], viewport:{x:0, y:0, k:1}});
+    return window.JSON.stringify({"nodes":[{"id":53756,"title":"David Cameron","x":426,"y":135,"image":"https://littlesis.org/images/profile/34/345b8bff6502dace207b886236f9d8521728e340_1273040317.png","dimensions":{"width":185,"height":250},"scale":0.75},{"id":67986,"title":"Boris Johnson","x":618,"y":135,"image":"https://littlesis.org/images/profile/4f/4f2ef90eafc8618280e50d564c3efe92.jpg","dimensions":{"width":200,"height":134},"scale":1},{"id":55778,"title":"Michael Gove","x":854,"y":369,"image":"https://littlesis.org/images/profile/ac/ac60d997b9dc853e6b0929023cea30cb.jpg","dimensions":{"width":150,"height":200},"scale":0.75},{"id":163547,"title":"Theresa May","x":616,"y":368,"image":"https://littlesis.org/images/profile/fe/fe61bc575dd06ce517d164f157aac13b.jpg","dimensions":{"width":189,"height":200},"scale":1.5},{"id":232409,"title":"Alexander Temerko","x":923,"y":134,"bg_color":"#ffb800","scale":2.25},{"id":276425,"title":"OGN Group","x":1115,"y":304,"bg_color":"#f6fbff","scale":1}],"edges":[{"source":53756,"target":67986},{"source":67986,"target":163547},{"source":55778,"target":163547},{"source":163547,"target":232409},{"source":232409,"target":67986},{"source":232409,"target":276425}],"viewport":{"k":1,"x":7,"y":46}});
   }
 
-  GraphCreator.prototype.startAdder = function() {
-    this.stagingNodeData = null;
-    this.state.awaitingStagingNodeData = false;
-    $("#overlay .card").hide();
-    $("#overlay").show();
-    $("#node_search_text").val("").focus();
+  GraphCreator.prototype.Overlay = function() {
+    var thisGraph = this;
+    thisGraph.adder = thisGraph.AdderPanel();
+    thisGraph.info = thisGraph.InfoPanel();
+    var self = {
+      panel: {
+        ADDER: "adder",
+        INFO: "info"
+      },
+      current: false,
+      init: function() {
+        $("#cover").on("click", self.forceClose);
+      },
+      show: function(panel, cover_nodes) {
+        $("#overlay > div").hide();
+        $("#overlay").show();
+        if (cover_nodes) $("#cover").show();
+        self.currentObject(panel).show();
+      },
+      hide: function() {
+        $("#overlay").hide();
+        $("#cover").hide();
+      },
+      forceClose: function() {
+        db("hiding");
+        self.hide();
+        self.currentObject().forceClose();
+      },
+      currentObject: function( t ) { /*getter and setter*/
+        if (t) self.current = t;
+        switch(self.current) {
+          case self.panel.ADDER:
+            return thisGraph.adder;
+          break;
+          case self.panel.INFO:
+            return thisGraph.info;
+          break;
+        }
+      }
+    }
+    self.init();
+    return self;
+  }
+
+  GraphCreator.prototype.AdderPanel = function() {
+    var thisGraph = this;
+    var self = {
+      newNode: function() {
+        self._staging.build();
+        thisGraph.overlay.show(thisGraph.overlay.panel.ADDER, true);
+      },
+      convertToChosen: function(data) {
+        self._staging.convertToChosen(data);
+      },
+      show: function() { /*required*/
+        if (!self._inited) self._init();
+        $("#adder .card").hide();
+        $("#adder").show();
+        $("#node_search_text").val("").focus();
+      },
+      forceClose: function() { /*required*/
+        self._staging.destroy();
+      },
+      _init: function() {
+        $( "#nodeChosenButton" ).on("click", self._nodeChosen);
+        thisGraph.AutoSuggest(self);
+        self._inited = true;
+      },
+      _nodeChosen: function() {
+        thisGraph.overlay.hide();
+        var nodeData = self._staging.data.node;
+        if (thisGraph.nodeExists(nodeData.id)) {
+          Swal.fire({
+            type: 'warning',
+            title: 'Oops...',
+            text: "You've already added this Node."
+          });
+          thisGraph.deleteNode(self._staging.node());
+          thisGraph.updateGraph();
+        } else if (self._staging.isReady()) {
+          var node_pos = self._staging.node().data()[0];
+          var node_det = self._staging.data.node;
+          thisGraph.deleteNode(self._staging.node(), true);
+          var new_node = {
+            id: node_det.id,
+            title: node_det.display.name,
+            x: node_pos.x,
+            y: node_pos.y
+          }
+          if (node_det.display.image) {
+            new_node.image = node_det.display.image;
+            new_node.dimensions = self._staging.data.img;
+          } else {
+            new_node.bg_color = $("#colouriser").val();
+          }
+          thisGraph.nodes.push(new_node);
+
+          db("New Edges", self._staging.data.edges);
+          for (var i in self._staging.data.edges) {
+            var edge_det = self._staging.data.edges[i];
+            var other_id = edge_det.node1_id==new_node.id ? edge_det.node2_id : edge_det.node1_id;
+            var target_node = d3.select("#Node"+other_id).data()[0];
+
+            var new_edge = {};
+            new_edge.source = edge_det.node1_id==new_node.id ? new_node : target_node ;
+            new_edge.target = edge_det.node2_id==new_node.id ? new_node : target_node ;
+            thisGraph.edges.push(new_edge);
+          }
+
+          /*** Temporary hack to remove multiple relationships between 2 nodes ***/
+          thisGraph.edges = thisGraph.edges.filter((thing,index) => {
+            return index === thisGraph.edges.findIndex(obj => {
+              return JSON.stringify(obj) === JSON.stringify(thing);
+            });
+          });
+          /********/
+
+          thisGraph.updateGraph();
+
+        }
+      },
+      _staging: {
+        data: null,
+        awaitingData: false,
+        build: function() {
+          self._staging.data = null;
+          self._staging.awaitingData = false;
+          var xycoords = d3.mouse(thisGraph.svgG.node()),
+              d = {id: "New", title: "...", x: xycoords[0], y: xycoords[1], staging:true};
+          thisGraph.nodes.push(d);
+          thisGraph.updateGraph();
+        },
+        destroy: function() {
+          if (self._staging.node().size()>0) {
+            thisGraph.deleteNode(self._staging.node());
+            thisGraph.updateGraph();
+          }
+        },
+        node: function() {
+          return d3.select("#NodeNew");
+        },
+        readyState: function() {
+          return !(!self._staging.data || self._staging.data.edges===false || self._staging.data.img===false);
+        },
+        isReady: function() {
+          var ready = self._staging.readyState();
+          thisGraph.bodyloader(!ready);
+          self._staging.awaitingData = !ready;
+          return ready;
+        },
+        proceedIfWaiting: function() {
+          if (self._staging.awaitingData && self._staging.readyState()) {
+            self._nodeChosen();
+          }
+        },
+        convertToChosen: function(data, attempts) {
+          self._staging.data = { node:data, edges:false, img: !data.display.image };
+          setTimeout(function() { //simulate delay
+            LsDataSource.getNodeWithEdges( data.id, thisGraph.getAllNodeIds(), function(response) {
+              if (!response) {
+                if (attempts==3) thisGraph.ajaxError();
+                return setTimeout(function(){ self._staging.convertToChosen(data, (++attempts || 2)) }, 1000);
+              }
+              self._staging.data.edges = response.edges;
+              self._staging.proceedIfWaiting();
+            });
+            if (data.display.image) {
+              getImageDimensions(data.display.image, function(dimensions) {
+                self._staging.data.img = dimensions;
+                self._staging.proceedIfWaiting();
+              });
+            }
+          });
+        }
+      }
+    }
+    return self;
+  }
+
+  GraphCreator.prototype.AutoSuggest = function(owner) {
+    var thisGraph = this;
+    var self = {
+      waiting: false,
+      init: function() {
+        var searchbox = $( "#node_search_text" );
+        searchbox
+          .on("keydown", function(e) {
+            if (e.key.length == 1) { //indicates a printable character was pressed
+              searchbox.autocomplete("close");
+              if (searchbox.val().length>=1) {
+                searchbox.toggleClass("ui-autocomplete-loading", true); //simulate searching immediately for feedback, but actually have a delay, as it's an expensive call
+              }
+            }
+            if (e.keyCode == thisGraph.consts.ENTER_KEY){
+              self.waiting = true;
+            }
+          })
+          .autocomplete({
+            autoFocus: true,
+            delay: 750,
+            source: function( request, response ) {
+              LsDataSource.findNodes( request.term, function(data) {
+                if (!data) {
+                  response([]);
+                  return thisGraph.ajaxError();
+                }
+
+                self.textEngine.searchTerm = request.term;
+                data.sort(self.textEngine.compare);
+
+                var out = [];
+                for (var i in data) {
+                  out.push({
+                    value: data[i].display.name,
+                    data: data[i]
+                  });
+                }
+
+                if (!self.waiting) {
+                  response( out );
+                } else {
+                  response([]);
+                  if (request.term==searchbox.val()) {
+                    self.selected(data[0]);
+                  }
+                }
+              });
+            },
+            minLength: 2,
+            search: function() {
+              //$( "#node_search_text" ).autocomplete("close");
+            },
+            select: function( event, ui ) {
+              var data = ui.item.data;
+              self.selected(data);
+            }
+          });
+      },
+      selected: function(data) {
+        self.waiting = false;
+        if (!data) return;
+        owner.convertToChosen(data);
+        $("#adder .card .name").text( data.display.name );
+        if (data.display.image) {
+          $("#adder .card img").replaceWith($("<img src='"+data.display.image+"'>"));
+          $("#adder .card").removeClass("noimg");
+        } else {
+          $("#adder .card").addClass("noimg");
+        }
+        $("#adder .card").show();
+        $("#adder .card input").focus();
+        setTimeout(function() { $("#node_search_text").val(""); }, 1);
+      },
+      textEngine: {
+        compare: function(a,b) {
+          var sa = self.textEngine.similarity(a.display.name, self.textEngine.searchTerm);
+          var sb = self.textEngine.similarity(b.display.name, self.textEngine.searchTerm);
+          if (sa>sb) {
+            return -1;
+          } else if (sa<sb) {
+            return 1;
+          } else {
+            if (a.display.image && !b.display.image) {
+              return -1;
+            } else if (!a.display.image && b.display.image) {
+              return 1;
+            }
+            return 0;
+          }
+        },
+        similarity: function(s1, s2) {
+          var longer = s1;
+          var shorter = s2;
+          if (s1.length < s2.length) {
+            longer = s2;
+            shorter = s1;
+          }
+          var longerLength = longer.length;
+          if (longerLength == 0) {
+            return 1.0;
+          }
+          return (longerLength - self.textEngine.editDistance(longer, shorter)) / parseFloat(longerLength);
+        },
+        editDistance: function(s1, s2) {
+          s1 = s1.toLowerCase();
+          s2 = s2.toLowerCase();
+
+          var costs = new Array();
+          for (var i = 0; i <= s1.length; i++) {
+            var lastValue = i;
+            for (var j = 0; j <= s2.length; j++) {
+              if (i == 0)
+                costs[j] = j;
+              else {
+                if (j > 0) {
+                  var newValue = costs[j - 1];
+                  if (s1.charAt(i - 1) != s2.charAt(j - 1))
+                    newValue = Math.min(Math.min(newValue, lastValue),
+                      costs[j]) + 1;
+                  costs[j - 1] = lastValue;
+                  lastValue = newValue;
+                }
+              }
+            }
+            if (i > 0)
+              costs[s2.length] = lastValue;
+          }
+          return costs[s2.length];
+        }
+      }
+    }
+    self.init();
+    return self;
+  }
+
+
+  GraphCreator.prototype.InfoPanel = function() {
+    var thisGraph = this;
+    var self = {
+      num: 0,
+      update: function() {
+        var new_count = thisGraph.getSelected().size();
+        if (new_count==self.num && self.num!=1) return; //do exception for single node, as introduced case where it skips the close-panel check, when clicking from one node to another
+        self.num = new_count;
+        if (self.num==0) {
+          thisGraph.overlay.hide();
+        } else {
+          self._build();
+          thisGraph.overlay.show(thisGraph.overlay.panel.INFO);
+        }
+      },
+      show: function() { /*required*/
+        $("#info").show();
+      },
+      forceClose: function() { /*required*/ },
+      _build: function() {
+        if (!self._inited) self._init();
+        $("#info #selection_title").text( self._groupValue("title") );
+        self._scaler.refresh();
+        self._colour.refresh();
+      },
+      _groupValue: function(field) {
+        var single = thisGraph.getSelected().size()==1;
+        var firstData = thisGraph.getSelected().data()[0];
+        switch(field) {
+          case "title":
+            return single ? firstData.title : "Multiple Nodes" ;
+          case "scale":
+            if (single) {
+              return firstData.scale || 1;
+            } else {
+              var total = 0;
+              thisGraph.getSelected().each(function(d) {
+                total += d.scale*1 || 1 ;
+              });
+              var average = total / thisGraph.getSelected().size();
+              return Math.round(average*4)/4;
+            }
+        }
+      },
+      _init: function() {
+        self._scaler.init();
+        self._colour.init();
+        self._inited = true;
+      },
+      _colour: {
+        init: function() {
+          $("#colouriserEdit").on("change", self._colour.update)
+        },
+        refresh: function() {
+          var n = self._colour.count();
+          $("#colourEditHolder").toggle(n>0);
+          if (n>0) {
+            $("#colouriserEdit").val( self._colour.list().data()[0].bg_color );
+          }
+        },
+        update: function() {
+          var c = $("#colouriserEdit").val();
+          self._colour.list().selectAll("circle")
+          .attr("fill", function(d) {
+            d.bg_color = c;
+            return d.bg_color;
+          });
+          thisGraph.save();
+        },
+        count: function() {
+          return self._colour.list().size();
+        },
+        list: function() {
+          return d3.select("svg").select(".circles").selectAll(".selected.clr");
+        }
+      },
+      _scaler: {
+        init: function() {
+          $("#scaleSlider").slider({
+            value: 1,
+            min: 0.25,
+            max: 3,
+            step: 0.25,
+            slide: function() {
+              setTimeout(function() {
+                self._scaler.update();
+                self._scaler.doScale();
+              });
+            }
+          });
+          self._scaler.update();
+        },
+        refresh: function() {
+          self._scaler.val( self._groupValue("scale") );
+        },
+        doScale: function() {
+          var v = self._scaler.val();
+          thisGraph.getSelected().each(function(d) {
+            d.scale = v;
+          });
+          thisGraph.updateGraph();
+        },
+        update: function() {
+          self._scaler.text( self._scaler.val() );
+        },
+        val: function( v ) {
+          if (!isNaN(v)) { //setter
+            $("#scaleSlider").slider("value", v);
+            self._scaler.text(v);
+          } else { //getter
+            return $("#scaleSlider").slider("value");
+          }
+        },
+        text: function(val) {
+          $("#scaleAmount").text( "Scale: "+val );
+        }
+      }
+    }
+    return self;
   }
 
   GraphCreator.prototype.data = function(selector) {
     return d3.select(selector).data()[0];
   }
 
-  GraphCreator.prototype.nodeChosen = function() {
-    $("#overlay").hide();
-    var nodeData = this.state.stagingNodeData.node;
-    if (this.nodeExists(nodeData.id)) {
-      Swal.fire({
-        type: 'warning',
-        title: 'Oops...',
-        text: "You've already added this Node."
-      });
-      this.deleteNode(this.getStagingNode());
-      this.updateGraph();
-    } else if (this.stagingNodeReady()) {
-      var node_pos = this.getStagingNode().data()[0];
-      var node_det = this.state.stagingNodeData.node;
-      this.deleteNode(this.getStagingNode(), true);
-      var new_node = {
-        id: node_det.id,
-        title: node_det.display.name,
-        x: node_pos.x,
-        y: node_pos.y
-      }
-      if (node_det.display.image) {
-        new_node.image = node_det.display.image;
-        new_node.dimensions = this.state.stagingNodeData.img;
-      } else {
-        new_node.bg_color = $("#colouriser").val();
-      }
-      this.nodes.push(new_node);
-
-      for (var i in this.state.stagingNodeData.edges) {
-        var edge_det = this.state.stagingNodeData.edges[i];
-        var other_id = edge_det.node1_id==new_node.id ? edge_det.node2_id : edge_det.node1_id;
-        var target_node = d3.select("#Node"+other_id).data()[0];
-
-        var new_edge = {};
-        new_edge.source = edge_det.node1_id==new_node.id ? new_node : target_node ;
-        new_edge.target = edge_det.node2_id==new_node.id ? new_node : target_node ;
-        this.edges.push(new_edge);
-      }
-
-      this.updateGraph();
-
-    }
-  }
-
-  GraphCreator.prototype.getStagingNode = function() {
-    return d3.select("#NodeNew");
-  }
-
   GraphCreator.prototype.nodeExists = function( id ) {
     return $.inArray(id, this.getAllNodeIds()) != -1;
-  }
-
-  GraphCreator.prototype.stagingNodeReadyState = function() {
-    return !(!this.state.stagingNodeData || this.state.stagingNodeData.edges===false || this.state.stagingNodeData.img===false);
-  }
-
-  GraphCreator.prototype.stagingNodeReady = function() {
-    var ready = this.stagingNodeReadyState();
-    this.bodyloader(!ready);
-    this.state.awaitingStagingNodeData = !ready;
-    return ready;
-  }
-
-  GraphCreator.prototype.checkStagingWaiting = function() {
-    if (this.state.awaitingStagingNodeData && this.stagingNodeReadyState()) {
-      this.nodeChosen();
-    }
-  }
-
-  GraphCreator.prototype.deleteNode = function(node, aboutToAdd) {
-    this.nodes.splice(this.nodes.indexOf(node), 1);
-    if (this.nodes.length==0 && !aboutToAdd) $("#dclick_prompt").show();
-    this.spliceLinksForNode(node);
-  };
-
-  GraphCreator.prototype.prepareStagingNode = function(data, attempts) {
-    var thisGraph = this;
-    thisGraph.state.stagingNodeData = { node:data, edges:false, img: !data.display.image };
-    setTimeout(function() { //simulate delay
-      LsDataSource.getNodeWithEdges( data.id, thisGraph.getAllNodeIds(), function(response) {
-        if (!response) {
-          if (attempts==3) thisGraph.ajaxError();
-          return setTimeout(function(){ thisGraph.prepareStagingNode(data, (++attempts || 2)) }, 1000);
-        }
-        thisGraph.state.stagingNodeData.edges = response.edges;
-        thisGraph.checkStagingWaiting();
-      });
-      if (data.display.image) {
-        getImageDimensions(data.display.image, function(dimensions) {
-          thisGraph.state.stagingNodeData.img = dimensions;
-          thisGraph.checkStagingWaiting();
-        });
-      }
-    });
-    /*
-    //FULL LIST OF RELATIONSHIPS, COULD BE HELPFUL LATER
-    LsDataSource.api( "entities/"+data.id+"/relationships", function(data) {
-      db("normal", data);
-    });*/
   }
 
   GraphCreator.prototype.getAllNodeIds = function() {
@@ -1101,9 +1376,11 @@ document.onload = (function(d3, undefined){
     $("body").toggleClass("loading", b!==false);
   }
 
-  d3.selection.prototype.moveToFront = function() {
-    return this.each(function(){
-      this.parentNode.appendChild(this);
+  GraphCreator.prototype.moveToFront = function(d) {
+    this.circles.each(function(e) { //Rather than append the node to the front, push everything else behind, to avoid the hover flicker
+      if (e.id!=d.id) {
+        this.parentNode.prepend(this);
+      }
     });
   };
 

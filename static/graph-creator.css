@@ -62,20 +62,18 @@ g.conceptG circle{
     stroke-width: 2px;
 }
 
-g.selected circle{
-    stroke:#1284e4;
-    stroke-width:7px;
+path.link {
+  fill: none;
+  stroke-width: 6px;
+  cursor: default;
+}
+.pathsShadow path.link {
+  stroke-width:25px;
+  stroke:transparent !important;
+  marker-end:none !important;
 }
 
-path.link {
-    fill: none;
-    stroke-width: 6px;
-    cursor: default;
-}
-path.link:hover{
-    stroke: rgb(94, 196, 204);
-}
-path.link, body.brushing path.link:hover {
+path.link, body.brushing path.link.hovered {
   stroke: #333;
 }
 
@@ -87,6 +85,26 @@ path.link.hidden{
     stroke-width: 0;
 }
 
+path.link {
+  marker-end: url("#end-arrow");
+}
+
+path.link.hovered{
+  marker-end: url("#end-arrow-hover");
+  stroke: #888;
+}
+
 path.link.selected {
-    stroke: rgb(229, 172, 247);
+  marker-end: url("#end-arrow-selected");
+}
+
+path.link.selected, g.selected circle {
+    stroke: #1284e4;
+}
+g.selected circle{
+    stroke-width:7px;
+}
+
+#overlay > div {
+  display:none;
 }
