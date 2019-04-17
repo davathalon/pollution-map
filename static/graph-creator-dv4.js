@@ -57,7 +57,7 @@ document.onload = (function(d3, undefined){
       .attr('orient', 'auto')
       .append('svg:path')
       .attr('d', 'M0,-5L10,0L0,5')
-      .style("fill", "#888");
+      .style("fill", "#aaa");
 
     // define arrow markers for leading arrow
     defs.append('svg:marker')
@@ -68,7 +68,8 @@ document.onload = (function(d3, undefined){
       .attr('markerHeight', 3.5)
       .attr('orient', 'auto')
       .append('svg:path')
-      .attr('d', 'M0,-5L10,0L0,5');
+      .attr('d', 'M0,-5L10,0L0,5')
+      .style("fill", "#ddd");;
 
     //create clip-path to hide corners of image
     svg.append("clipPath")
@@ -1253,12 +1254,13 @@ document.onload = (function(d3, undefined){
       show: function() { /*required*/
         $("#info").show();
       },
-      forceClose: function() { /*required*/ },
+      forceClose: function() { /*required*/},
       _build: function() {
         if (!self._inited) self._init();
         $("#info #selection_title").text( self._groupValue("title") );
         self._scaler.refresh();
         self._colour.refresh();
+        self._shaper.refresh();
       },
       _groupValue: function(field) {
         var single = thisGraph.getSelected().size()==1;
@@ -1282,6 +1284,7 @@ document.onload = (function(d3, undefined){
       _init: function() {
         self._scaler.init();
         self._colour.init();
+        self._shaper.init();
         self._inited = true;
       },
       _colour: {
@@ -1309,6 +1312,127 @@ document.onload = (function(d3, undefined){
         },
         list: function() {
           return d3.select("svg").select(".circles").selectAll(".selected.clr");
+        }
+      },
+      _shaper: {
+        shapes: {
+          "circle": {
+            start: 0,
+            end: 1000,
+            step: 10,
+            prompt: "Radius",
+            text: "Circle"
+          },
+          "horizontal": {
+            start: 0,
+            end: 1000,
+            step: 10,
+            prompt: "Padding",
+            text: "Horizontal Line"
+          },
+          "vertical": {
+            start: 0,
+            end: 1000,
+            step: 10,
+            prompt: "Padding",
+            text: "Vertical Line"
+          }
+        },
+        init: function() {
+          var out = [];
+          out.push( self._shaper.options.build() );
+          out.push( self._shaper.sliders.build() );
+          $("#shaperOptions").append(out);
+        },
+        refresh: function() {
+          self._shaper.options.reset();
+        },
+        options: {
+          default: {
+            name: "none",
+            text: "None"
+          },
+          build: function() {
+            var options = self._shaper.options;
+            options.holder = $("<select>");
+            options.holder.on("change", options.change)
+            options.holder.append( options.node(options.default.name, options.default.text) );
+            for (var i in self._shaper.shapes) {
+              options.holder.append( options.node(i, self._shaper.shapes[i].text) );
+            }
+            return options.holder;
+          },
+          reset: function() {
+            var options = self._shaper.options;
+            options.val( options.default.name );
+          },
+          val: function( v ) {
+            var options = self._shaper.options;
+            if (v) { //setter
+              options.holder.val( v );
+              options.change();
+            } else { //getter
+              return options.holder.val();
+            }
+          },
+          node: function(name, text) {
+            return $("<option>").text(text).val(name);
+          },
+          change: function() {
+            self._shaper.sliders.select( self._shaper.options.val() );
+          }
+        },
+        sliders: {
+          build: function() {
+            var sliders = self._shaper.sliders;
+            sliders.holder = $("<div>");
+            for (var i in self._shaper.shapes) {
+              sliders.holder.append( new self._shaper.sliders.Node(i, self._shaper.shapes[i]) );
+            }
+            sliders.select( self._shaper.options.default.name );
+            return sliders.holder;
+          },
+          select: function( name ) {
+            self._shaper.sliders.holder.find("> div").hide();
+            if (name != self._shaper.options.default.name) {
+              self._shaper.sliders.holder.find("."+name).show();
+            }
+          },
+          Node: function(name, data) {
+            var sc = this;
+            this.init = function() {
+              sc.slider = $("<div>");
+              sc.slider.slider({
+                value: data.start,
+                min: data.start,
+                max: data.end,
+                step: data.step,
+                slide: function() {
+                  setTimeout(function() {
+                    sc.refresh();
+                  });
+                }
+              });
+              sc.container = $("<div>").addClass(name);
+              sc.container.append("<div class='prompt'></div>")
+              sc.container.append(sc.slider);
+
+              sc.refresh();
+              return sc.container;
+            }
+            this.refresh = function() {
+              sc.container.find(".prompt").text(data.prompt+": "+sc.val());
+            }
+            this.val = function( v ) {
+              if (!isNaN(v)) { //setter
+                sc.slider.slider("value", v);
+                sc.refresh();
+              } else { //getter
+                return sc.slider.slider("value");
+              }
+            }
+            return this.init();
+          }
         }
       },
       _scaler: {

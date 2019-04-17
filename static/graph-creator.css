@@ -58,13 +58,13 @@ marker{
 }
 
 g.conceptG circle{
-    stroke: #333;
+    stroke: #777;
     stroke-width: 2px;
 }
 
 path.link {
   fill: none;
-  stroke-width: 6px;
+  stroke-width: 5px;
   cursor: default;
 }
 .pathsShadow path.link {
@@ -74,7 +74,7 @@ path.link {
 }
 
 path.link, body.brushing path.link.hovered {
-  stroke: #333;
+  stroke: #ddd;
 }
 
 g.connect-node circle{
@@ -85,18 +85,20 @@ path.link.hidden{
     stroke-width: 0;
 }
 
+
+
 path.link {
-  marker-end: url("#end-arrow");
+  /*marker-end: url("#end-arrow");*/
 }
-
 path.link.hovered{
-  marker-end: url("#end-arrow-hover");
-  stroke: #888;
+  /*marker-end: url("#end-arrow-hover");*/
+  stroke: #aaa;
+}
+path.link.selected {
+  /*marker-end: url("#end-arrow-selected");*/
 }
 
-path.link.selected {
-  marker-end: url("#end-arrow-selected");
-}
+
 
 path.link.selected, g.selected circle {
     stroke: #1284e4;

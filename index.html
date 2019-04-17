@@ -169,14 +169,37 @@
           <div id="selection_title" style="font-size:18px;font-weight:bold">
 
           </div>
-          <div style="margin-top:15px">
+          <div style="margin-top:20px">
             <div id="scaleAmount" class="subtitle" style="margin-bottom:9px"></div>
             <div id="scaleSlider"></div>
-            <div id="colourEditHolder" style="margin-top:15px">
+            <div id="colourEditHolder" style="margin-top:25px">
               <div class="subtitle" style="margin-bottom:9px">
                 Select a Colour:
               </div>
               <input id="colouriserEdit" type="color" value="#f6fbff" style="width:100%;height:100px">
+            </div>
+          </div>
+          <div id="shaper" style="margin-top:25px">
+            <div class="subtitle" style="margin-bottom:9px">
+              Select a Shape
+            </div>
+            <style>
+              #shaperOptions select {
+                width:100%;
+                font-size:14px;
+              }
+              #shaperOptions > div {
+                margin: 15px 25px 0;
+                font-size: 12px; /*changes slider size*/
+              }
+              #shaperOptions .prompt {
+                margin-bottom:5px;
+                font-size:11px;
+                color:#999;
+              }
+            </style>
+            <div id="shaperOptions">
+
             </div>
           </div>
         </div>
