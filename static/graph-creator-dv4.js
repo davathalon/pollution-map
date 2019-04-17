@@ -132,14 +132,14 @@ document.onload = (function(d3, undefined){
     });
 
 
-    // listen for dragging
-    var dragSvg = d3.zoom().scaleExtent([1 / 2, 4])
+    //Zoom setup
+    var dragSvg = d3.zoom().scaleExtent([1/4, 4])
           .on("zoom", function(){
             console.log('zoom');
             if (d3.event.sourceEvent.shiftKey){
               // TODO  the internal d3 state is still changing
               return false;
-            } else{
+            } else {
               thisGraph.zoomed.call(thisGraph);
             }
             return true;
@@ -689,6 +689,8 @@ document.onload = (function(d3, undefined){
           dd.y +=  d3.event.dy;
         }
       });
+
+      thisGraph.info.dragged();
 
       if (!d3node.classed("selected") && thisGraph.definitelyDragged(d)) {
         thisGraph.clearSelection();
@@ -1254,6 +1256,11 @@ document.onload = (function(d3, undefined){
       show: function() { /*required*/
         $("#info").show();
       },
+      dragged: function() {
+        if (thisGraph.getSelected().size()>1) {
+          self._shaper.resetCenter();
+        }
+      },
       forceClose: function() { /*required*/},
       _build: function() {
         if (!self._inited) self._init();
@@ -1279,6 +1286,14 @@ document.onload = (function(d3, undefined){
               var average = total / thisGraph.getSelected().size();
               return Math.round(average*4)/4;
             }
+          case "y":
+          case "x":
+            var min = 0, max = 0;
+            thisGraph.getSelected().each(function(d) {
+              if (!min || d[field] < min) min = d[field];
+              if (!max || d[field] > max) max = d[field];
+            });
+            return min+(max-min)/2 ;
         }
       },
       _init: function() {
@@ -1317,25 +1332,96 @@ document.onload = (function(d3, undefined){
       _shaper: {
         shapes: {
           "circle": {
-            start: 0,
-            end: 1000,
-            step: 10,
-            prompt: "Radius",
-            text: "Circle"
+            sliders: [
+              {
+                default: 200,
+                start: 0,
+                end: 1000,
+                step: 10,
+                prompt: "Radius"
+              },
+              {
+                default: 0,
+                start: 0,
+                end: 6.3,
+                step: 0.01,
+                prompt: "Rotation",
+                label: function(d) {
+                  return Math.floor(d * 180/Math.PI) + "&deg;";
+                }
+              },
+              {
+                default: 1/2,
+                start: 1/2,
+                end: 3,
+                step: 0.01,
+                prompt: "Curve",
+                label: function(d) {
+                  if (d==0.5) return d+" (circle)";
+                  return d;
+                }
+              }
+            ],
+            text: "Circle / Curve",
+            position: function() {
+              var ds = thisGraph.getSelected();
+
+              var center_x = self._shaper.avg_x;
+              var center_y = self._shaper.avg_y;
+
+              var radius = self._shaper.sliders.get("circle", 0).val();
+              var angle_start = self._shaper.sliders.get("circle", 1).val();
+              if (angle_start>Math.PI*2) angle_start = Math.PI*2;
+
+              var curve = self._shaper.sliders.get("circle", 2).val();
+
+              var numNodes = ds.size();
+              var width = (radius * 2) + 50,
+                  height = (radius * 2) + 50,
+                  angle, i = 0;
+              var positions = [];
+
+              for (var i=0; i<numNodes; i++) {
+                angle = angle_start + (i / (numNodes*curve)) * Math.PI;
+
+                var pos = {
+                  x: center_x + (radius * Math.cos(angle)),
+                  y: center_y + (radius * Math.sin(angle))
+                }
+                //Find closest node to position
+                var result = self._shaper.closestNode(ds, pos);
+                ds = result.list;
+                db(i, ds);
+                result.data.x = pos.x;
+                result.data.y = pos.y;
+              }
+            }
           },
           "horizontal": {
-            start: 0,
-            end: 1000,
-            step: 10,
-            prompt: "Padding",
-            text: "Horizontal Line"
+            sliders: [{
+              default: 50,
+              start: 0,
+              end: 250,
+              step: 10,
+              prompt: "Padding"
+            }],
+            text: "Horizontal Line",
+            position: function() {
+              self._shaper.straightLinePositioner("x");
+            }
           },
           "vertical": {
-            start: 0,
-            end: 1000,
-            step: 10,
-            prompt: "Padding",
-            text: "Vertical Line"
+            sliders: [{
+              default: 50,
+              start: 0,
+              end: 250,
+              step: 10,
+              prompt: "Padding"
+            }],
+            text: "Vertical Line",
+            position: function() {
+              self._shaper.straightLinePositioner("y");
+            }
           }
         },
         init: function() {
@@ -1344,8 +1430,78 @@ document.onload = (function(d3, undefined){
           out.push( self._shaper.sliders.build() );
           $("#shaperOptions").append(out);
         },
+        update: function() {
+          var shape = self._shaper.options.val();
+          if (shape != self._shaper.options.default.name) {
+            var data = self._shaper.shapes[ shape ];
+            data.position();
+            thisGraph.updateGraph();
+          }
+        },
         refresh: function() {
-          self._shaper.options.reset();
+          var show = thisGraph.getSelected().size()>1;
+          if (show) {
+            self._shaper.options.reset();
+            self._shaper.resetCenter();
+          }
+          $("#shaper").toggle(show);
+        },
+        resetCenter: function() { /*mainly for circle - since rotating gives a new average center depending on positions of nodes, so isn't steady*/
+          self._shaper.avg_x = self._groupValue("x");
+          self._shaper.avg_y = self._groupValue("y");
+        },
+        closestNode: function(nodes, pos) {
+          var shortest, node, data;
+          nodes.each(function(d) {
+            var distance = Math.pow(d.x-pos.x, 2) + Math.pow(d.y-pos.y, 2); //square rooting unecessary
+            if (typeof shortest=="undefined" || distance<shortest) {
+              shortest = distance;
+              node = this;
+              data = d;
+            }
+          });
+          return {
+            list: nodes.filter(function() {
+              return (this!=node);
+            }),
+            data: data
+          }
+        },
+        straightLinePositioner: function( dir ) { /* x or y*/
+          var ds = thisGraph.getSelected();
+          var size_dimension = dir=="x" ? "width" : "height";
+          var opposite_point = dir=="x" ? "y" : "x";
+          var slider_name = dir=="x" ? "horizontal" : "vertical";
+
+          var num = ds.size();
+          var padding = self._shaper.sliders.get(slider_name).val();
+          var end_width = 0, j = 0;
+
+          ds = ds.sort(function(a, b) { //keep in closest x order
+             return d3.ascending(a[dir], b[dir]);
+          });
+
+          ds.each(function(d) { //pre-calculate new width to devise initial x-position
+            var scale = d.scale || 1 ;
+            var node_width = d3.select(this).select("circle").node().getBBox()[size_dimension] * scale;
+            if (j==0 || j==num-1) node_width /= 2;
+            end_width += node_width;
+            j++;
+          });
+          end_width += padding*(num-1);
+
+          var xpos = self._groupValue(dir) - end_width/2; //make it increase in size from the center
+          var y = self._groupValue(opposite_point);
+          j = 0;
+          ds.each(function(d) {
+            var scale = d.scale || 1 ;
+            var node_width = d3.select(this).select("circle").node().getBBox()[size_dimension] * scale;
+            if (j!=0) xpos += node_width/2;
+            d[opposite_point] = y;
+            d[dir] = xpos;
+            xpos += node_width / 2 + padding;
+            j++;
+          });
         },
         options: {
           default: {
@@ -1380,17 +1536,28 @@ document.onload = (function(d3, undefined){
           },
           change: function() {
             self._shaper.sliders.select( self._shaper.options.val() );
+            self._shaper.update();
           }
         },
         sliders: {
           build: function() {
             var sliders = self._shaper.sliders;
+            var shapes = self._shaper.shapes;
             sliders.holder = $("<div>");
-            for (var i in self._shaper.shapes) {
-              sliders.holder.append( new self._shaper.sliders.Node(i, self._shaper.shapes[i]) );
+            sliders.link = {};
+            for (var i in shapes) {
+              sliders.link[i] = [];
+              for (var j in shapes[i].sliders) {
+                sliders.link[i][j] = new sliders.Node(i, shapes[i].sliders[j]);
+                sliders.holder.append( sliders.link[i][j].container );
+              }
             }
             sliders.select( self._shaper.options.default.name );
             return sliders.holder;
+          },
+          get: function(name, which) {
+            which = which || 0;
+            return self._shaper.sliders.link[name][which];
           },
           select: function( name ) {
             self._shaper.sliders.holder.find("> div").hide();
@@ -1403,35 +1570,37 @@ document.onload = (function(d3, undefined){
             this.init = function() {
               sc.slider = $("<div>");
               sc.slider.slider({
-                value: data.start,
+                value: data.default,
                 min: data.start,
                 max: data.end,
                 step: data.step,
                 slide: function() {
                   setTimeout(function() {
-                    sc.refresh();
+                    sc.refreshText();
+                    self._shaper.update();
                   });
                 }
               });
               sc.container = $("<div>").addClass(name);
               sc.container.append("<div class='prompt'></div>")
               sc.container.append(sc.slider);
-
-              sc.refresh();
-              return sc.container;
+              sc.refreshText();
             }
-            this.refresh = function() {
-              sc.container.find(".prompt").text(data.prompt+": "+sc.val());
+            this.refreshText = function() {
+              var out = data.prompt+": ";
+              out += data.label ? data.label(sc.val()) : sc.val();
+              sc.container.find(".prompt").html(out);
             }
             this.val = function( v ) {
               if (!isNaN(v)) { //setter
                 sc.slider.slider("value", v);
-                sc.refresh();
+                sc.refreshText();
               } else { //getter
                 return sc.slider.slider("value");
               }
             }
-            return this.init();
+            this.init();
+            return this;
           }
         }
       },
