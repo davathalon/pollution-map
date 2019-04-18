@@ -874,7 +874,12 @@ document.onload = (function(d3, undefined){
     this.edges.forEach(function(val, i){
       saveEdges.push({source: val.source.id, target: val.target.id, });
     });
-    var out = window.JSON.stringify({"nodes": this.nodes, "edges": saveEdges, viewport: this.state.transform});
+    var out = window.JSON.stringify({
+      "nodes": this.nodes,
+      "edges": saveEdges,
+      viewport: this.state.transform,
+      shapes: this.info._shaper.config.history
+    });
     localStorage.setItem("saved_graph", out );
   }
 
@@ -888,6 +893,7 @@ document.onload = (function(d3, undefined){
     thisGraph.nodes = jsonObj.nodes.filter(function(n) {
       return !n.staging;
     });
+    thisGraph.info._shaper.config.history = jsonObj.shapes;
     var newEdges = jsonObj.edges;
 
     newEdges.forEach(function(e, i){
@@ -919,7 +925,7 @@ document.onload = (function(d3, undefined){
   }
 
   GraphCreator.prototype.defaultData = function() {
-    return window.JSON.stringify({"nodes":[{"id":53756,"title":"David Cameron","x":426,"y":135,"image":"https://littlesis.org/images/profile/34/345b8bff6502dace207b886236f9d8521728e340_1273040317.png","dimensions":{"width":185,"height":250},"scale":0.75},{"id":67986,"title":"Boris Johnson","x":618,"y":135,"image":"https://littlesis.org/images/profile/4f/4f2ef90eafc8618280e50d564c3efe92.jpg","dimensions":{"width":200,"height":134},"scale":1},{"id":55778,"title":"Michael Gove","x":854,"y":369,"image":"https://littlesis.org/images/profile/ac/ac60d997b9dc853e6b0929023cea30cb.jpg","dimensions":{"width":150,"height":200},"scale":0.75},{"id":163547,"title":"Theresa May","x":616,"y":368,"image":"https://littlesis.org/images/profile/fe/fe61bc575dd06ce517d164f157aac13b.jpg","dimensions":{"width":189,"height":200},"scale":1.5},{"id":232409,"title":"Alexander Temerko","x":923,"y":134,"bg_color":"#ffb800","scale":2.25},{"id":276425,"title":"OGN Group","x":1115,"y":304,"bg_color":"#f6fbff","scale":1}],"edges":[{"source":53756,"target":67986},{"source":67986,"target":163547},{"source":55778,"target":163547},{"source":163547,"target":232409},{"source":232409,"target":67986},{"source":232409,"target":276425}],"viewport":{"k":1,"x":7,"y":46}});
+    return window.JSON.stringify({"nodes":[{"id":53756,"title":"David Cameron","x":426,"y":135,"image":"https://littlesis.org/images/profile/34/345b8bff6502dace207b886236f9d8521728e340_1273040317.png","dimensions":{"width":185,"height":250},"scale":0.75},{"id":67986,"title":"Boris Johnson","x":618,"y":135,"image":"https://littlesis.org/images/profile/4f/4f2ef90eafc8618280e50d564c3efe92.jpg","dimensions":{"width":200,"height":134},"scale":1},{"id":55778,"title":"Michael Gove","x":854,"y":369,"image":"https://littlesis.org/images/profile/ac/ac60d997b9dc853e6b0929023cea30cb.jpg","dimensions":{"width":150,"height":200},"scale":0.75},{"id":163547,"title":"Theresa May","x":616,"y":368,"image":"https://littlesis.org/images/profile/fe/fe61bc575dd06ce517d164f157aac13b.jpg","dimensions":{"width":189,"height":200},"scale":1.5},{"id":232409,"title":"Alexander Temerko","x":923,"y":134,"bg_color":"#ffb800","scale":2.25},{"id":276425,"title":"OGN Group","x":1115,"y":304,"bg_color":"#f6fbff","scale":1}],"edges":[{"source":53756,"target":67986},{"source":67986,"target":163547},{"source":55778,"target":163547},{"source":163547,"target":232409},{"source":232409,"target":67986},{"source":232409,"target":276425}],"viewport":{"k":1,"x":7,"y":46}, "shapes":{}});
   }
 
   GraphCreator.prototype.Overlay = function() {
@@ -1258,7 +1264,7 @@ document.onload = (function(d3, undefined){
       },
       dragged: function() {
         if (thisGraph.getSelected().size()>1) {
-          self._shaper.resetCenter();
+          self._shaper.moveCenter();
         }
       },
       forceClose: function() { /*required*/},
@@ -1391,7 +1397,6 @@ document.onload = (function(d3, undefined){
                 //Find closest node to position
                 var result = self._shaper.closestNode(ds, pos);
                 ds = result.list;
-                db(i, ds);
                 result.data.x = pos.x;
                 result.data.y = pos.y;
               }
@@ -1435,7 +1440,50 @@ document.onload = (function(d3, undefined){
           if (shape != self._shaper.options.default.name) {
             var data = self._shaper.shapes[ shape ];
             data.position();
+            self._shaper.config.save();
             thisGraph.updateGraph();
+          }
+        },
+        config: {
+          history: {},
+          save: function() {
+            var category = self._shaper.options.val();
+            if (category!=self._shaper.options.default.name) {
+              var sliders = self._shaper.sliders.getAll( self._shaper.options.val() );
+              var out = {
+                center: {
+                  x: self._shaper.avg_x,
+                  y: self._shaper.avg_y
+                },
+                sliders: []
+              }
+              for (var i in sliders) out.sliders.push(sliders[i].val());
+              var c = self._shaper.config;
+              c.history[c.currentId()] = out;
+              thisGraph.save();
+            }
+          },
+          load: function() {
+            var c = self._shaper.config;
+            var history = c.history[c.currentId()]
+            if (history) {
+              self._shaper.avg_x = history.center.x;
+              self._shaper.avg_y = history.center.y;
+              var sliders = self._shaper.sliders.getAll( self._shaper.options.val() );
+              for (var i in sliders) {
+                sliders[i].val( history.sliders[i] );
+              }
+            }
+          },
+          currentId: function() {
+            var s = thisGraph.getSelected().sort(function(a, b) {
+               return d3.ascending(a.id, b.id);
+            });
+            var n = self._shaper.options.val();
+            s.each(function(d) {
+              n += "_" + d.id;
+            });
+            return n;
           }
         },
         refresh: function() {
@@ -1449,6 +1497,12 @@ document.onload = (function(d3, undefined){
         resetCenter: function() { /*mainly for circle - since rotating gives a new average center depending on positions of nodes, so isn't steady*/
           self._shaper.avg_x = self._groupValue("x");
           self._shaper.avg_y = self._groupValue("y");
+        },
+        moveCenter: function() {
+          if (!d3.event) return;
+          self._shaper.avg_x += d3.event.dx;
+          self._shaper.avg_y += d3.event.dy;
+          self._shaper.config.save();
         },
         closestNode: function(nodes, pos) {
           var shortest, node, data;
@@ -1536,6 +1590,7 @@ document.onload = (function(d3, undefined){
           },
           change: function() {
             self._shaper.sliders.select( self._shaper.options.val() );
+            self._shaper.config.load();
             self._shaper.update();
           }
         },
@@ -1558,6 +1613,9 @@ document.onload = (function(d3, undefined){
           get: function(name, which) {
             which = which || 0;
             return self._shaper.sliders.link[name][which];
+          },
+          getAll: function(name) {
+            return self._shaper.sliders.link[name];
           },
           select: function( name ) {
             self._shaper.sliders.holder.find("> div").hide();
