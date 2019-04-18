@@ -1436,13 +1436,11 @@ document.onload = (function(d3, undefined){
           $("#shaperOptions").append(out);
         },
         update: function() {
-          var shape = self._shaper.options.val();
-          if (shape != self._shaper.options.default.name) {
-            var data = self._shaper.shapes[ shape ];
-            data.position();
-            self._shaper.config.save();
-            thisGraph.updateGraph();
-          }
+          if (!self._shaper.isActive()) return;
+          var data = self._shaper.shapes[ self._shaper.options.val() ];
+          data.position();
+          self._shaper.config.save();
+          thisGraph.updateGraph();
         },
         config: {
           history: {},
@@ -1493,6 +1491,9 @@ document.onload = (function(d3, undefined){
             self._shaper.resetCenter();
           }
           $("#shaper").toggle(show);
+        },
+        isActive: function() {
+          return thisGraph.getSelected().size()>1 && $("#shaper").is(":visible") && self._shaper.options.val() != self._shaper.options.default.name;
         },
         resetCenter: function() { /*mainly for circle - since rotating gives a new average center depending on positions of nodes, so isn't steady*/
           self._shaper.avg_x = self._groupValue("x");
