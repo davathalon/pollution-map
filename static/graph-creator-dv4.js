@@ -1295,11 +1295,21 @@ document.onload = (function(d3, undefined){
           case "y":
           case "x":
             var min = 0, max = 0;
+            var search = field;
             thisGraph.getSelected().each(function(d) {
               if (!min || d[field] < min) min = d[field];
               if (!max || d[field] > max) max = d[field];
             });
             return min+(max-min)/2 ;
+          case "width":
+          case "height":
+            var min, max;
+            var search = field=="width" ? "x" : "y";
+            thisGraph.getSelected().each(function(d) {
+              if (typeof min =="undefined" || d[search] < min) min = d[search];
+              if (typeof max =="undefined" || d[search] > max) max = d[search];
+            });
+            return max-min;
         }
       },
       _init: function() {
@@ -1340,7 +1350,9 @@ document.onload = (function(d3, undefined){
           "circle": {
             sliders: [
               {
-                default: 200,
+                default: function() {
+                  return self._groupValue("width") / 2;
+                },
                 start: 0,
                 end: 1000,
                 step: 10,
@@ -1462,14 +1474,19 @@ document.onload = (function(d3, undefined){
             }
           },
           load: function() {
+            db("trying history");
             var c = self._shaper.config;
-            var history = c.history[c.currentId()]
+            var history = c.history[c.currentId()];
+            var sliders = self._shaper.sliders.getAll( self._shaper.options.val() );
             if (history) {
               self._shaper.avg_x = history.center.x;
               self._shaper.avg_y = history.center.y;
-              var sliders = self._shaper.sliders.getAll( self._shaper.options.val() );
               for (var i in sliders) {
                 sliders[i].val( history.sliders[i] );
+              }
+            } else {
+              for (var i in sliders) {
+                sliders[i].showDefault();
               }
             }
           },
@@ -1637,7 +1654,7 @@ document.onload = (function(d3, undefined){
             this.init = function() {
               sc.slider = $("<div>");
               sc.slider.slider({
-                value: data.default,
+                value: !isNaN(data.default) ? data.default : data.default(),
                 min: data.start,
                 max: data.end,
                 step: data.step,
@@ -1660,6 +1677,11 @@ document.onload = (function(d3, undefined){
               var out = data.prompt+": ";
               out += data.label ? data.label(sc.val()) : sc.val();
               sc.container.find(".prompt").html(out);
+            }
+            this.showDefault = function() {
+              var num = !isNaN(data.default) ? data.default : data.default();
+              db("SHOWING DEFAULT", num);
+              this.val( num );
             }
             this.val = function( v ) {
               if (!isNaN(v)) { //setter
