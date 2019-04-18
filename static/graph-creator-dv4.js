@@ -1375,7 +1375,9 @@ document.onload = (function(d3, undefined){
                 step: 0.01,
                 prompt: "Curve",
                 label: function(d) {
-                  if (d==0.5) return d+" (circle)";
+                  d -= 0.5; //let's make circle = 0, instead of the actual equation variable 0.5
+                  d = Math.round(d*100)/100;
+                  if (d===0) return d+" (circle)";
                   return d;
                 }
               }
@@ -1474,7 +1476,6 @@ document.onload = (function(d3, undefined){
             }
           },
           load: function() {
-            db("trying history");
             var c = self._shaper.config;
             var history = c.history[c.currentId()];
             var sliders = self._shaper.sliders.getAll( self._shaper.options.val() );
@@ -1680,7 +1681,6 @@ document.onload = (function(d3, undefined){
             }
             this.showDefault = function() {
               var num = !isNaN(data.default) ? data.default : data.default();
-              db("SHOWING DEFAULT", num);
               this.val( num );
             }
             this.val = function( v ) {
