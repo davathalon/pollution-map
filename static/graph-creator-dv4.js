@@ -1589,9 +1589,17 @@ document.onload = (function(d3, undefined){
             return $("<option>").text(text).val(name);
           },
           change: function() {
+            self._shaper.options.animate();
             self._shaper.sliders.select( self._shaper.options.val() );
             self._shaper.config.load();
             self._shaper.update();
+          },
+          animate: function() {
+            $("body").addClass("animate");
+            if (self._shaper.animateWait) clearTimeout(self._shaper.animateWait);
+            self._shaper.animateWait = setTimeout(function() {
+              $("body").removeClass("animate");
+            }, 250);
           }
         },
         sliders: {
@@ -1636,6 +1644,9 @@ document.onload = (function(d3, undefined){
                   setTimeout(function() {
                     sc.refreshText();
                     self._shaper.update();
+                    setTimeout(function() {
+                      if (data.animate==false) $("body").addClass("noanimate");
+                    })
                   });
                 }
               });
@@ -1686,6 +1697,7 @@ document.onload = (function(d3, undefined){
           thisGraph.getSelected().each(function(d) {
             d.scale = v;
           });
+          self._shaper.update();
           thisGraph.updateGraph();
         },
         update: function() {

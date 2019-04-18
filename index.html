@@ -19,6 +19,12 @@
           cursor: -moz-grab;
           cursor: -webkit-grab;
       }
+      body.animate svg g {
+        -webkit-transition: transform 0.3s; /* Safari */
+      }
+      body.animate svg path {
+        -webkit-transition: d 0.3s; /* Safari */
+      }
       svg path, svg circle, svg image {
         cursor:default;
       }
