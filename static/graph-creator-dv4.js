@@ -2,8 +2,15 @@ document.onload = (function(d3, undefined){
   "use strict";
 
   // define graphcreator object
-  var GraphCreator = function(svg){
+  var GraphCreator = function(){
     var thisGraph = this;
+
+    thisGraph.preview = getvar("preview")==1;
+    if (thisGraph.preview) {
+      $("body").addClass("preview");
+    }
+
+    thisGraph.toolbarWidth = thisGraph.preview ? 0 : 300;
 
     thisGraph.initDom();
     thisGraph.nodes = [];
@@ -26,7 +33,7 @@ document.onload = (function(d3, undefined){
     thisGraph.overlay = thisGraph.Overlay();
 
     // define arrow markers for graph links
-    var defs = svg.append('svg:defs');
+    var defs = thisGraph.svg.append('svg:defs');
     defs.append('svg:marker')
       .attr('id', 'end-arrow')
       .attr('viewBox', '0 -5 10 10')
@@ -72,15 +79,14 @@ document.onload = (function(d3, undefined){
       .style("fill", "#ddd");;
 
     //create clip-path to hide corners of image
-    svg.append("clipPath")
+    thisGraph.svg.append("clipPath")
     	.attr("id", "circle-clip")
       .append("circle")
     	.attr("cx", 0)
     	.attr("cy", 0)
     	.attr("r", 49)
 
-    thisGraph.svg = svg;
-    thisGraph.svgG = svg.append("g").classed(thisGraph.consts.graphClass, true);
+    thisGraph.svgG = thisGraph.svg.append("g").classed(thisGraph.consts.graphClass, true);
 
     thisGraph.dragLine = thisGraph.svgG.append('svg:path') // displayed when dragging between nodes
         .attr('class', 'link dragline hidden')
@@ -118,15 +124,16 @@ document.onload = (function(d3, undefined){
     .on("keyup", function(){
       thisGraph.svgKeyUp.call(thisGraph);
     });
-    svg.on("mousedown", function(d){
-      console.log('mouse down');
+    thisGraph.svg.on("mousedown", function(d){
+      console.log('svg mouse down');
+      closeAllColourPickers();
       thisGraph.svgMouseDown.call(thisGraph, d);
     });
-    svg.on("click", function(d){
+    thisGraph.svg.on("click", function(d){
       // console.log("svg mouse up");
       thisGraph.svgMouseUp.call(thisGraph, d);
     });
-    svg.on("dblclick", function(d){
+    thisGraph.svg.on("dblclick", function(d){
       // console.log("svg mouse up");
       thisGraph.svgDoubleClick.call(thisGraph, d);
     });
@@ -154,10 +161,12 @@ document.onload = (function(d3, undefined){
           });
           //.on("zoom", thisGraph.zoomed.call(thisGraph));
 
-    svg.call(dragSvg).on("dblclick.zoom", null);
+    thisGraph.svg.call(dragSvg).on("dblclick.zoom", null);
 
     // listen for resize
-    window.onresize = function(){thisGraph.updateWindow(svg);};
+    window.onresize = function() {
+      thisGraph.updateWindow();
+    }
 
     thisGraph.load();
 
@@ -233,6 +242,9 @@ document.onload = (function(d3, undefined){
 
   GraphCreator.prototype.initDom = function() {
     var thisGraph = this;
+
+    thisGraph.svg = d3.select("#svgHolder").append("svg");
+    thisGraph.updateWindow();
 
     $(document).on("contextmenu", function (e) {
       if (thisGraph.state.ctrlDown) {
@@ -361,6 +373,7 @@ document.onload = (function(d3, undefined){
       })
       .on("mousedown", function(d){
         console.log('circle mousedown :', this, d);
+        closeAllColourPickers();
         thisGraph.circleMouseDown.call(thisGraph, d3.select(this), d);
         thisGraph.moveToFront(d);
       })
@@ -448,7 +461,8 @@ document.onload = (function(d3, undefined){
   GraphCreator.prototype.pathMouseDown = function(d3path, d){
     var thisGraph = this,
         state = thisGraph.state;
-        db("PATH MOUSE DOWN");
+
+    closeAllColourPickers();
     d3.event.stopPropagation();
     state.mouseDownLink = d;
 
@@ -815,6 +829,9 @@ document.onload = (function(d3, undefined){
           thisGraph.setSelected(d3.select("svg").select(".circles").selectAll(".conceptG"), true);
         }
       break;
+      case consts.ENTER_KEY:
+        closeAllColourPickers();
+      break;
       case consts.BACKSPACE_KEY:
       case consts.DELETE_KEY:
 
@@ -858,12 +875,12 @@ document.onload = (function(d3, undefined){
     this.save();
   };
 
-  GraphCreator.prototype.updateWindow = function(svg){
+  GraphCreator.prototype.updateWindow = function(){
     var docEl = document.documentElement,
         bodyEl = document.getElementsByTagName('body')[0];
     var x = window.innerWidth || docEl.clientWidth || bodyEl.clientWidth;
     var y = window.innerHeight|| docEl.clientHeight|| bodyEl.clientHeight;
-    svg.attr("width", x).attr("height", y);
+    this.svg.attr("width", x-this.toolbarWidth).attr("height", y);
   };
 
 
@@ -878,7 +895,8 @@ document.onload = (function(d3, undefined){
       "nodes": this.nodes,
       "edges": saveEdges,
       viewport: this.state.transform,
-      shapes: this.info._shaper.config.history
+      shapes: this.info._shaper.config.history,
+      meta: this.project.meta()
     });
     localStorage.setItem("saved_graph", out );
   }
@@ -903,6 +921,8 @@ document.onload = (function(d3, undefined){
       };
     });
     thisGraph.edges = newEdges;
+    thisGraph.project.meta( jsonObj.meta );
+
     if (!thisGraph.nodes) $("#dclick_prompt").show();
 
     thisGraph.setViewport(jsonObj.viewport);
@@ -920,41 +940,46 @@ document.onload = (function(d3, undefined){
   GraphCreator.prototype.setViewport = function(v) {
     this.state.transform = v;
     var zoomExtent = d3.zoom().scaleExtent([v.x, v.y]);
-    svg.call(zoomExtent.transform, d3.zoomIdentity.translate(v.x, v.y).scale(v.k));
+    this.svg.call(zoomExtent.transform, d3.zoomIdentity.translate(v.x, v.y).scale(v.k));
     d3.select("." + this.consts.graphClass).attr("transform", "translate("+v.x+","+v.y+")scale(" +v.k+ ")");
   }
 
   GraphCreator.prototype.defaultData = function() {
-    return window.JSON.stringify({"nodes":[{"id":53756,"title":"David Cameron","x":426,"y":135,"image":"https://littlesis.org/images/profile/34/345b8bff6502dace207b886236f9d8521728e340_1273040317.png","dimensions":{"width":185,"height":250},"scale":0.75},{"id":67986,"title":"Boris Johnson","x":618,"y":135,"image":"https://littlesis.org/images/profile/4f/4f2ef90eafc8618280e50d564c3efe92.jpg","dimensions":{"width":200,"height":134},"scale":1},{"id":55778,"title":"Michael Gove","x":854,"y":369,"image":"https://littlesis.org/images/profile/ac/ac60d997b9dc853e6b0929023cea30cb.jpg","dimensions":{"width":150,"height":200},"scale":0.75},{"id":163547,"title":"Theresa May","x":616,"y":368,"image":"https://littlesis.org/images/profile/fe/fe61bc575dd06ce517d164f157aac13b.jpg","dimensions":{"width":189,"height":200},"scale":1.5},{"id":232409,"title":"Alexander Temerko","x":923,"y":134,"bg_color":"#ffb800","scale":2.25},{"id":276425,"title":"OGN Group","x":1115,"y":304,"bg_color":"#f6fbff","scale":1}],"edges":[{"source":53756,"target":67986},{"source":67986,"target":163547},{"source":55778,"target":163547},{"source":163547,"target":232409},{"source":232409,"target":67986},{"source":232409,"target":276425}],"viewport":{"k":1,"x":7,"y":46}, "shapes":{}});
+    return window.JSON.stringify({"nodes":[{"id":53756,"title":"David Cameron","x":352.6651956068024,"y":342.590498119622,"image":"https://littlesis.org/images/profile/34/345b8bff6502dace207b886236f9d8521728e340_1273040317.png","dimensions":{"width":185,"height":250},"scale":0.8},{"id":67986,"title":"Boris Johnson","x":433.33350409878494,"y":454.6848950838606,"image":"https://littlesis.org/images/profile/4f/4f2ef90eafc8618280e50d564c3efe92.jpg","dimensions":{"width":200,"height":134},"scale":0.8},{"id":55778,"title":"Michael Gove","x":354.7014660418663,"y":204.50218062516754,"image":"https://littlesis.org/images/profile/ac/ac60d997b9dc853e6b0929023cea30cb.jpg","dimensions":{"width":150,"height":200},"scale":0.8},{"id":163547,"title":"Theresa May","x":438.6399015898029,"y":94.83509867484443,"image":"https://littlesis.org/images/profile/fe/fe61bc575dd06ce517d164f157aac13b.jpg","dimensions":{"width":189,"height":200},"scale":0.8},{"id":232409,"title":"Alexander Temerko","x":577.9181948296973,"y":499.61339363775727,"bg_color":"#D8CDFF","scale":0.8},{"id":276425,"title":"OGN Group","x":579.4036775499206,"y":58.80472109920541,"bg_color":"#D8CDFF","scale":0.8},{"id":91459,"title":"Random House, Inc.","x":577,"y":266,"bg_color":"#FFB8B8","scale":1.2},{"id":15108,"title":"Donald Trump","x":837,"y":266,"image":"https://littlesis.org/images/profile/76/76717d147aec6b8ed1a2e429e6d08a4af8335589_1226284399.png","dimensions":{"width":400,"height":280},"scale":1.2},{"id":326933,"title":"James Go","x":1019.5,"y":165,"bg_color":"#FFFFFF","scale":0.6},{"id":13377,"title":"John Kerry","x":1019.5,"y":245,"image":"https://littlesis.org/images/profile/18/188be541973eef0a5e97ab8b6ba85feb7de486d3_1226040039.png","dimensions":{"width":180,"height":225},"scale":0.6},{"id":234046,"title":"Hello Living","x":1019.5,"y":325,"bg_color":"#FFFFFF","scale":0.6},{"id":257423,"title":"Cambridge Analytica","x":1019.5,"y":405,"bg_color":"#FFFFFF","scale":0.6},{"id":228488,"title":"Test","x":1019.5,"y":85,"image":"https://littlesis.org/images/profile/a8/a82a358599d1836c47bacc277920136a.jpg","dimensions":{"width":200,"height":97},"scale":0.6},{"id":13443,"title":"John S. McCain III","x":1019.5,"y":485,"image":"https://littlesis.org/images/profile/40/409335aedacc7b30575f1012645976284ce7ff5b_1365622416.png","dimensions":{"width":380,"height":251},"scale":0.6}],"edges":[{"source":53756,"target":67986},{"source":67986,"target":163547},{"source":55778,"target":163547},{"source":163547,"target":232409},{"source":232409,"target":67986},{"source":276425,"target":163547},{"source":91459,"target":276425},{"source":91459,"target":232409},{"source":15108,"target":91459},{"source":15108,"target":13377},{"source":15108,"target":13443},{"source":257423,"target":15108},{"source":234046,"target":15108},{"source":326933,"target":15108},{"source":228488,"target":15108}],"viewport":{"k":1,"x":-152,"y":63},"shapes":{"circle_53756_55778_67986_163547_232409_276425":{"center":{"x":660.5430490768784,"y":276.6262151871647},"sliders":[220,1.56,0.82]},"horizontal_53756_55778_67986_163547_232409_276425":{"center":{"x":797.2088062456069,"y":217.77096629290963},"sliders":[100]},"vertical_53756_55778_67986_163547_232409_276425":{"center":{"x":774.2088062456069,"y":290.77096629290963},"sliders":[30]},"vertical_13377_234046_257423_326933":{"center":{"x":1076,"y":295},"sliders":[50]},"vertical_13377_13443_228488_234046_257423_326933":{"center":{"x":1019.5,"y":285},"sliders":[20]}},"meta":{"projectTitle":"Test Map","projectBackgroundURL":"http://s3.amazonaws.com/bw-2e2c4bf7ceaa4712a72dd5ee136dc9a8-bwcore/American-flag-photo.jpg","projectBackgroundOpacity":0.14,"projectArrowColour":"#656565","projectArrowWidth":2}});
   }
 
   GraphCreator.prototype.Overlay = function() {
     var thisGraph = this;
     thisGraph.adder = thisGraph.AdderPanel();
     thisGraph.info = thisGraph.InfoPanel();
+    thisGraph.project = thisGraph.ProjectPanel();
     var self = {
       panel: {
         ADDER: "adder",
-        INFO: "info"
+        INFO: "info",
+        PROJECT: "project"
       },
       current: false,
       init: function() {
         $("#cover").on("click", self.forceClose);
+        self.show(self.panel.PROJECT);
       },
       show: function(panel, cover_nodes) {
         $("#overlay > div").hide();
         $("#overlay").show();
         if (cover_nodes) $("#cover").show();
         self.currentObject(panel).show();
+        closeAllColourPickers();
       },
       hide: function() {
-        $("#overlay").hide();
         $("#cover").hide();
+        self.show(self.panel.PROJECT);
+        //$("#overlay").hide();
       },
       forceClose: function() {
-        db("hiding");
+        var panel = self.currentObject();
+        if (panel.forceClose) panel.forceClose();
         self.hide();
-        self.currentObject().forceClose();
       },
       currentObject: function( t ) { /*getter and setter*/
         if (t) self.current = t;
@@ -964,6 +989,9 @@ document.onload = (function(d3, undefined){
           break;
           case self.panel.INFO:
             return thisGraph.info;
+          break;
+          case self.panel.PROJECT:
+            return thisGraph.project;
           break;
         }
       }
@@ -993,6 +1021,7 @@ document.onload = (function(d3, undefined){
       },
       _init: function() {
         $( "#nodeChosenButton" ).on("click", self._nodeChosen);
+        self._colourpicker = new ColourPicker(false, false, "#colouriser", "#f6fbff");
         thisGraph.AutoSuggest(self);
         self._inited = true;
       },
@@ -1021,7 +1050,7 @@ document.onload = (function(d3, undefined){
             new_node.image = node_det.display.image;
             new_node.dimensions = self._staging.data.img;
           } else {
-            new_node.bg_color = $("#colouriser").val();
+            new_node.bg_color = self._colourpicker.val();
           }
           thisGraph.nodes.push(new_node);
 
@@ -1244,6 +1273,174 @@ document.onload = (function(d3, undefined){
   }
 
 
+  GraphCreator.prototype.ProjectPanel = function() {
+    var thisGraph = this;
+    var self = {
+      init: function() {
+        $("#projectTitle").on("keyup", function() {
+          thisGraph.save();
+        });
+        $("#projectBackgroundURL").on("blur", function() {
+          self.background.image_update();
+          thisGraph.save();
+        });
+        $("#projectBackgroundOpacity").slider({
+          value: 0.2,
+          min: 0,
+          max: 1,
+          step: 0.01,
+          slide: function() {
+            setTimeout(function() {
+              self.background.opacity_update();
+              thisGraph.save();
+            });
+          }
+        });
+
+        self.projectArrowColour = new ColourPicker(function() {
+          self.background.arrow_colour_update();
+        }, function() {
+          thisGraph.save();
+        }, "#projectArrowColour");
+
+        $("#projectArrowWidth").slider({
+          value: 5,
+          min: 1,
+          max: 15,
+          step: 1,
+          slide: function() {
+            setTimeout(function() {
+              self.background.arrow_width_update();
+              thisGraph.save();
+            });
+          }
+        });
+        $("#project input[type=text]").on("keypress", function(e) {
+          if (e.keyCode==13) $(this).blur(); //enter
+        });
+        $("#graphPreview").on("click", self.preview.start);
+        $("#graphSave").on("click", function() {
+          myalert("Coming soon...", false, "info");
+        });
+        self._inited = true;
+      },
+      preview: {
+        start: function() {
+          $("#piframe").html( $("<iframe>").attr("src","index.html?preview=1") );
+          $("#svgHolder svg").hide();
+          $("#piframe").resizable({
+            start: function() {
+              $("#previewer").addClass("dragging");
+            },
+            stop: function() {
+              $("#previewer").removeClass("dragging");
+            }
+          });
+          $("#previewer").show();
+        }
+      },
+      refresh: function() {/*Perform tasks related to current values*/
+        self.background.image_update();
+        self.background.opacity_update();
+        self.background.arrow_colour_update();
+        self.background.arrow_width_update();
+      },
+      show: function() { /*required*/
+        if (!self._inited) self.init();
+        $("#project").show();
+      },
+      background: {
+        image_update: function() {
+          var url = $("#projectBackgroundURL").val();
+          if (url) {
+            getImageDimensions(url, function(d, success) {
+              if (success===false) {
+                myalert('Invalid Image', "Please try again with a different URL", 'warning');
+                $("#svgBackground").css("background-image", "none");
+                self.background.hide_image();
+              }
+            });
+            $("#svgBackground").css("background-image", "url("+url+")");
+          } else {
+            self.background.hide_image();
+          }
+        },
+        hide_image: function() {
+          $("#svgBackground").css("background-image", "none");
+        },
+        opacity_update: function() {
+          $("#svgBackground").css("opacity", $("#projectBackgroundOpacity").slider("value"));
+        },
+        arrow_colour_update: function() {
+          var c = self.projectArrowColour.val();
+          var hover_c = self.background.colourTooDark(c) ? "#777" : d3.rgb(c).darker(1.3);
+          $("body").append("<style>path.link { stroke: "+c+"} path.link.hovered:not(.selected) { stroke: "+hover_c+"}</style>");
+        },
+        arrow_width_update: function() {
+          var width = $("#projectArrowWidth").slider("value");
+          $("body").append("<style>path.link { stroke-width: "+width+"px}</style>");
+        },
+        colourTooDark: function(hexcolor){
+          try { //colour input may return non-hex in other browsers
+            var r = parseInt(hexcolor.substr(1,2),16);
+            var g = parseInt(hexcolor.substr(3,2),16);
+            var b = parseInt(hexcolor.substr(4,2),16);
+            var yiq = ((r*299)+(g*587)+(b*114))/1000;
+            return (yiq < 50);
+          } catch(err) {
+            return false;
+          }
+        }
+      },
+      meta: function( v ) {
+        var sg = {
+          input: function(i, v) {
+            if (v) {
+              $("#"+i).val(v);
+            } else {
+              return $("#"+i).val();
+            }
+          },
+          slider: function(i, v) {
+            if (v) {
+              $("#"+i).slider("value", v);
+            } else {
+              return $("#"+i).slider("value");
+            }
+          },
+          colour: function(i, v) {
+            if (v) {
+              self[i].val(v);
+            } else {
+              return self[i].val();
+            }
+          }
+        }
+        var fields = { //ID :: is_slider
+          projectTitle: sg.input,
+          projectBackgroundURL: sg.input,
+          projectBackgroundOpacity: sg.slider,
+          projectArrowColour: sg.colour,
+          projectArrowWidth: sg.slider
+        }
+        if (v) { //setter
+          for (var i in fields) {
+            fields[i](i, v[i]);
+          }
+          self.refresh();
+        } else { //getter
+          var out = {};
+          for (var i in fields) {
+            out[i] = fields[i](i);
+          }
+          db(out);
+          return out;
+        }
+      }
+    }
+    return self;
+  }
+
   GraphCreator.prototype.InfoPanel = function() {
     var thisGraph = this;
     var self = {
@@ -1267,7 +1464,6 @@ document.onload = (function(d3, undefined){
           self._shaper.moveCenter();
         }
       },
-      forceClose: function() { /*required*/},
       _build: function() {
         if (!self._inited) self._init();
         $("#info #selection_title").text( self._groupValue("title") );
@@ -1320,23 +1516,26 @@ document.onload = (function(d3, undefined){
       },
       _colour: {
         init: function() {
-          $("#colouriserEdit").on("change", self._colour.update)
+          self._colour.picker = new ColourPicker(function() {
+            self._colour.update();
+          }, function() {
+            thisGraph.save();
+          }, "#colouriserEdit", "#f6fbff");
         },
         refresh: function() {
           var n = self._colour.count();
           $("#colourEditHolder").toggle(n>0);
           if (n>0) {
-            $("#colouriserEdit").val( self._colour.list().data()[0].bg_color );
+            self._colour.picker.val( self._colour.list().data()[0].bg_color );
           }
         },
         update: function() {
-          var c = $("#colouriserEdit").val();
+          var c = self._colour.picker.val();
           self._colour.list().selectAll("circle")
           .attr("fill", function(d) {
             d.bg_color = c;
             return d.bg_color;
           });
-          thisGraph.save();
         },
         count: function() {
           return self._colour.list().size();
@@ -1354,7 +1553,7 @@ document.onload = (function(d3, undefined){
                   return self._groupValue("width") / 2;
                 },
                 start: 0,
-                end: 1000,
+                end: 1200,
                 step: 10,
                 prompt: "Radius"
               },
@@ -1375,14 +1574,15 @@ document.onload = (function(d3, undefined){
                 step: 0.01,
                 prompt: "Curve",
                 label: function(d) {
-                  d -= 0.5; //let's make circle = 0, instead of the actual equation variable 0.5
+                  d += 0.5; //let's make circle = 1, instead of the actual equation variable 0.5
                   d = Math.round(d*100)/100;
-                  if (d===0) return d+" (circle)";
+                  if (d===1) return d+" (circle)";
                   return d;
                 }
               }
             ],
             text: "Circle / Curve",
+            updateCenterOnDrag: true,
             position: function() {
               var ds = thisGraph.getSelected();
 
@@ -1420,7 +1620,7 @@ document.onload = (function(d3, undefined){
             sliders: [{
               default: 50,
               start: 0,
-              end: 250,
+              end: 300,
               step: 10,
               prompt: "Padding"
             }],
@@ -1433,7 +1633,7 @@ document.onload = (function(d3, undefined){
             sliders: [{
               default: 50,
               start: 0,
-              end: 250,
+              end: 300,
               step: 10,
               prompt: "Padding"
             }],
@@ -1459,8 +1659,8 @@ document.onload = (function(d3, undefined){
         config: {
           history: {},
           save: function() {
-            var category = self._shaper.options.val();
-            if (category!=self._shaper.options.default.name) {
+            var c = self._shaper.config;
+            if (self._shaper.isActive()) {
               var sliders = self._shaper.sliders.getAll( self._shaper.options.val() );
               var out = {
                 center: {
@@ -1470,9 +1670,23 @@ document.onload = (function(d3, undefined){
                 sliders: []
               }
               for (var i in sliders) out.sliders.push(sliders[i].val());
-              var c = self._shaper.config;
               c.history[c.currentId()] = out;
               thisGraph.save();
+            } else {
+              //Not actively shaping, so just update the average position of the nodes in question, so that they can have the same relative position after dragging (e.g. circle needs to keep it's proper center-point)
+              for (var i in self._shaper.shapes) {
+                if (self._shaper.shapes[i].updateCenterOnDrag) {
+                  var history = c.history[c.currentId(i)];
+                  if (history) {
+                    history.center = {
+                      x: self._shaper.avg_x,
+                      y: self._shaper.avg_y
+                    }
+                    db(c.currentId(i), c.history[c.currentId(i)]);
+                    thisGraph.save();
+                  }
+                }
+              }
             }
           },
           load: function() {
@@ -1491,11 +1705,11 @@ document.onload = (function(d3, undefined){
               }
             }
           },
-          currentId: function() {
+          currentId: function( i ) {
             var s = thisGraph.getSelected().sort(function(a, b) {
                return d3.ascending(a.id, b.id);
             });
-            var n = self._shaper.options.val();
+            var n = i ? i : self._shaper.options.val();
             s.each(function(d) {
               n += "_" + d.id;
             });
@@ -1700,9 +1914,9 @@ document.onload = (function(d3, undefined){
         init: function() {
           $("#scaleSlider").slider({
             value: 1,
-            min: 0.25,
+            min: 0.2,
             max: 3,
-            step: 0.25,
+            step: 0.1,
             slide: function() {
               setTimeout(function() {
                 self._scaler.update();
@@ -1782,26 +1996,67 @@ document.onload = (function(d3, undefined){
       foo({
         width: 100,
         height: 100
-      })
+      }, false)
     }
     img.src = url;
   }
 
-  function getViewPortDimensions() {
-    var docEl = document.documentElement, bodyEl = document.getElementsByTagName('body')[0];
-    return {
-      width: window.innerWidth || docEl.clientWidth || bodyEl.clientWidth,
-      height: window.innerHeight|| docEl.clientHeight|| bodyEl.clientHeight
+  function myalert(title, text, icon) {
+    Swal.fire({
+      title: title,
+      text: text,
+      type: icon
+    });
+  }
+
+  var CPS = [];
+  function closeAllColourPickers() {
+    for (var i in CPS) {
+      CPS[i].picker.hide();
     }
+  }
+
+  function ColourPicker( onsmallchange, onbigchange, replaceNode, value ) {
+    this.init = function() {
+      CPS.push(this);
+      this.button = $("<button>").addClass("colourpicker");
+      this.picker = new jscolor( this.button.get(0), {
+        onFineChange: onsmallchange,
+        change: onbigchange,
+        value: this.removeHash(value) || "dddddd",
+        valueElement: null
+      });
+      if (replaceNode) $(replaceNode).replaceWith(this.button.get(0));
+    }
+    this.val = function( v ) {
+      if (v) {
+        this.picker.fromString( this.removeHash(v) );
+      } else {
+        return this.picker.toHEXString();
+      }
+    }
+    this.removeHash = function(c) {
+      if (!c) return false;
+      return c.split("#").pop();
+    }
+    this.getNode = function() {
+      return this.button.get(0);
+    }
+    this.init();
+  }
+
+  function getvar(variable) {
+     var query = window.location.search.substring(1);
+     var vars = query.split("&");
+     for (var i=0;i<vars.length;i++) {
+             var pair = vars[i].split("=");
+             if(pair[0] == variable){return pair[1];}
+     }
+     return(false);
   }
 
   /**** MAIN ****/
 
-  var dimensions = getViewPortDimensions();
-  var svg = d3.select("body").append("svg")
-    .attr("width", dimensions.width)
-    .attr("height", dimensions.height);
-
-  var graph = new GraphCreator(svg);
+  var graph = new GraphCreator();
 
 })(window.d3);

@@ -92,7 +92,6 @@ path.link {
 }
 path.link.hovered{
   /*marker-end: url("#end-arrow-hover");*/
-  stroke: #aaa;
 }
 path.link.selected {
   /*marker-end: url("#end-arrow-selected");*/
