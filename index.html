@@ -5,8 +5,9 @@
     <link rel="stylesheet" href="static/graph-creator.css" />
     <link rel="stylesheet" href="static/jquery-ui.css">
     <style>
-      body {
+      html, body {
         font-family:arial,sans-serif;
+        background:white;
       }
       body.loading * {
         cursor:wait !important;
@@ -19,6 +20,18 @@
         border:3px solid white;
         box-shadow:0 0 1px black;
       }
+
+      body.previewHolder #svgHolder, body #previewer, body #project_preview, body.previewHolder #project_non_preview {
+        display:none;
+      }
+      body.previewHolder #previewer, body.previewHolder #project_preview {
+        display:block;
+      }
+      body.previewHolder {
+        overflow:auto;
+      }
+
+
       @font-face {
         font-family:Gotham;
         src: url(static/Gotham-Black.otf);
@@ -26,8 +39,8 @@
       .logo {
         font-family:Gotham;
         font-weight:bold;
-        font-size:43px;
-        text-align:center;
+        font-size:42px;
+        text-align:left;
         color:black;
       }
       .logo:after {
@@ -184,12 +197,14 @@
 
       <style>
         #overlay > div {
-          position:absolute;width:300px;height:100%;
+          position:fixed;
+          width:300px;height:100%;
           background:rgba(256,256,256,0.97);
           z-index:1;
           box-shadow:2px 0px 5px #999;
           padding:20px;
           box-sizing:border-box;
+          overflow-y:auto;
         }
         #project input[type=text] {
           width: 100%;
@@ -197,7 +212,7 @@
           padding: 3px;
           font-size: 19px;
         }
-        #svgHolder {
+        #svgHolder, #previewer {
           margin-left:300px;
           position:relative;
         }
@@ -218,12 +233,23 @@
           z-index:10;
           position:relative;
         }
+        #piframe > div {
+          width:840px; /*default size*/
+          height:600px;
+        }
         #piframe iframe {
           display:block;
           width:100%;
           height:100%;
           border:0;
           border: 1px solid #444;
+        }
+        #pdimensions {
+          margin-top: 10px;
+          color: #bbb;
+          font-size: 13px;
+          cursor:pointer;
+          display:inline-block;
         }
         #previewer #pcover {
           display:none;
@@ -241,19 +267,85 @@
         body.preview #svgHolder {
           margin-left:0;
         }
+        #svgHolder .logo {
+          font-size: 25px;
+          position: absolute;
+          right: 11px;
+          bottom: 7px;
+          display:none;
+          z-index:100;
+          text-decoration:none;
+        }
+        body.preview #svgHolder .logo {
+          display:block;
+        }
+        @media (max-width: 500px) {
+          #svgHolder .logo {
+            font-size:20px;
+          }
+        }
+        @media (max-width: 350px) {
+          #svgHolder .logo {
+            font-size:14px;
+          }
+        }
+        @media (max-width: 200px) {
+          #svgHolder .logo {
+            visibility:hidden;
+          }
+        }
+        #mapActionButtons {
+          position:absolute;top:10px;right:10px;
+          z-index:100
+        }
+        #mapActionButtons > img {
+          width: 17px;
+          background: rgba(256,256,256,0.7);
+          padding: 5px;
+          border: 1px solid #999;
+          border-radius: 3px;
+          cursor:pointer;
+        }
+        #blurb textarea {
+          width: 100%;
+          max-width:100%;
+          min-width:100%;
+          box-sizing: border-box;
+          font-size:12px;
+        }
+        .infopopup span:first-child {
+          font-style:italic;
+          display:block;
+          margin-bottom:15px;
+          font-size:20px;
+          font-weight:bold
+        }
+        .infopopup span:last-child {
+          display:block;
+          max-height: 120px;
+          overflow-y: auto;
+          border: 1px solid #ddd;
+          border-radius: 3px;
+          font-size: 13px;
+          text-align: left;
+          white-space: pre-wrap;
+          padding: 5px;
+        }
       </style>
       <div id="svgHolder">
         <div id="dclick_prompt">Double-click to add a Node</div>
         <div id="svgBackground"></div>
-        <div id="previewer">
-          <div id="pcover"></div>
-          <div style="padding:40px;">
-            <div>
-              <div style="margin-bottom:20px;">
-                You are in Preview Mode. You can change the size of the preview pane by dragging the edges.
-              </div>
-              <div id="piframe" style="width:750px;height:500px"></div>
-            </div>
+        <a href="https://desmog.co.uk" target="_blank" class="logo">DESMOG</a>
+        <div id="mapActionButtons">
+          <img id="fsbutton" src="images/fullscreen.svg">
+        </div>
+      </div>
+      <div id="previewer">
+        <div id="pcover"></div>
+        <div style="padding:40px 40px 15px">
+          <div>
+            <div id="piframe"></div>
+            <div id="pdimensions"></div>
           </div>
         </div>
       </div>
@@ -261,31 +353,41 @@
 
         <div id="project" style="background:rgba(244,244,244,0.97)">
           <div class="logo" style="margin-bottom:12px">DESMOG</div>
-          <div class="fields">
-            <div>
-              <div class="subtitle" style="margin-bottom:5px;">Map Title:</div>
-              <input id="projectTitle" type="text">
-            </div>
-            <div>
-              <div class="subtitle" style="margin-bottom:5px;">Background Image (URL):</div>
-              <input id="projectBackgroundURL" type="text">
-            </div>
-            <div>
-              <div class="subtitle" style="margin-bottom:7px;">Background Opacity:</div>
-              <div id="projectBackgroundOpacity"></div>
-            </div>
-            <div>
-              <div class="subtitle" style="margin-bottom:7px;">Arrow Width:</div>
-              <div id="projectArrowWidth"></div>
-            </div>
-            <div>
-              <div class="subtitle" style="margin-bottom:4px;">Arrow Colour:</div>
-              <div id="projectArrowColour"></div>
+          <div id="project_preview">
+            <div class="buttons" style="margin-top:20px;">
+              <div style="margin-bottom: 20px;font-size: 17px;font-style: italic;">
+                You are in Preview Mode. You can change the size of the preview pane by dragging the edges.
+              </div>
+              <input id="exitPreviewMode" class="myButton" type="button" value="Exit Preview Mode" style="width:100%">
             </div>
           </div>
-          <div class="buttons" style="margin-top:30px;display:none">
-            <input id="graphSave" class="myButton" type="button" value="Save" style="margin-right:6px">
-            <input id="graphPreview" class="myButton" type="button" value="Preview">
+          <div id="project_non_preview">
+            <div class="fields">
+              <div>
+                <div class="subtitle" style="margin-bottom:5px;">Map Title:</div>
+                <input id="projectTitle" type="text">
+              </div>
+              <div>
+                <div class="subtitle" style="margin-bottom:5px;">Background Image (URL):</div>
+                <input id="projectBackgroundURL" type="text">
+              </div>
+              <div>
+                <div class="subtitle" style="margin-bottom:7px;">Background Opacity:</div>
+                <div id="projectBackgroundOpacity"></div>
+              </div>
+              <div>
+                <div class="subtitle" style="margin-bottom:7px;">Arrow Width:</div>
+                <div id="projectArrowWidth"></div>
+              </div>
+              <div>
+                <div class="subtitle" style="margin-bottom:4px;">Arrow Colour:</div>
+                <div id="projectArrowColour"></div>
+              </div>
+            </div>
+            <div class="buttons" style="margin-top:30px;">
+              <input id="graphSave" class="myButton" type="button" value="Save" style="margin-right:6px">
+              <input id="graphPreview" class="myButton" type="button" value="Preview">
+            </div>
           </div>
         </div>
 
@@ -302,6 +404,16 @@
               </div>
               <input id="colouriserEdit" type="color" value="#f6fbff" style="width:100%;height:50px">
             </div>
+          </div>
+          <div id="blurb">
+            <div class="subtitle" style="margin-top:25px;margin-bottom:9px">
+              Edit Short Description:
+            </div>
+            <textarea id="blurbShort" style="height: 70px;"></textarea>
+            <div class="subtitle" style="margin-top:25px;margin-bottom:9px">
+              Edit Long Description:
+            </div>
+            <textarea id="blurbLong" style="height: 140px;"></textarea>
           </div>
           <div id="shaper" style="margin-top:25px">
             <div class="subtitle" style="margin-bottom:9px">
