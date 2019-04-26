@@ -8,9 +8,38 @@
       html, body {
         font-family:arial,sans-serif;
         background:white;
+        padding-right: 0 !important; /*swal adds padding to stop shift on scroll-bar*/
       }
       body.loading * {
         cursor:wait !important;
+      }
+      #svgHolder {
+        background:white;
+      }
+      var, a {
+        color:#096ba5;
+        cursor:pointer;
+        font-style:normal;
+        text-decoration:none;
+      }
+      var:hover, a:hover {
+        text-decoration:underline;
+      }
+      /*#project_non_preview .buttons input {
+        padding:6px 16px;
+      }*/
+      #projectLink {
+        margin-right:-200px;
+      }
+      #projectLink a {
+        font-size:11px
+      }
+      #projectLinkCopy {
+        width: 11px;vertical-align: middle;cursor: pointer;
+        opacity:0.6;
+      }
+      #projectLinkCopy:hover {
+        opacity:1;
       }
       .colourpicker {
         width:100%;
@@ -20,17 +49,35 @@
         border:3px solid white;
         box-shadow:0 0 1px black;
       }
-
-      body.previewHolder #svgHolder, body #previewer, body #project_preview, body.previewHolder #project_non_preview {
+      body.previewHolder #svgHolder, body #previewer, body #project_preview, body.previewHolder #project_non_preview, body #project_pre_save {
         display:none;
       }
-      body.previewHolder #previewer, body.previewHolder #project_preview {
+      body.previewHolder:not(.preSave) #project_preview {
         display:block;
       }
+      body.previewHolder #previewer, body.previewHolder.preSave #project_pre_save {
+        display:block;
+      }
+
       body.previewHolder {
         overflow:auto;
       }
 
+      #projectList {
+        border:1px solid #ccc;margin-top:9px;border-radius:3px;max-height:200px;overflow-y:auto;
+        background: white;
+        max-height:300px;
+        max-height: calc(100% - 140px);
+        min-height:115px;
+      }
+      #projectList > div {
+        border-bottom: 1px solid #ccc;
+        padding:10px;
+        cursor:pointer;
+      }
+      #projectList > div:hover {
+        background:#eee;
+      }
 
       @font-face {
         font-family:Gotham;
@@ -88,11 +135,8 @@
         max-height:200px;max-width:100%;
         border-radius:3px;
       }
-      #adder .card .addcp, #adder .card.noimg img {
+      #adder .card.noimg img {
         display:none;
-      }
-      #adder .card.noimg .addcp {
-        display:block;
       }
       #dclick_prompt {
         display:none;
@@ -150,6 +194,9 @@
       	position:relative;
       	top:1px;
       }
+      .myButton.grayscale {
+        filter:grayscale(100%) brightness(120%);
+      }
       svg text {
         font-size:16px;
         font-weight:bold;
@@ -190,10 +237,6 @@
   <body>
 
     <div style="height:100%">
-
-      <div id="toolbox" style="display:none">
-        <input type="file" id="hidden-file-upload"><input id="upload-input" type="image" title="upload graph" src="images/upload-icon.png" alt="upload graph"> <input type="image" id="download-input" title="download graph" src="images/download-icon.png" alt="download graph"> <input type="image" id="delete-graph" title="delete graph" src="images/trash-icon.png" alt="delete graph">
-      </div>
 
       <style>
         #overlay > div {
@@ -306,6 +349,23 @@
           border-radius: 3px;
           cursor:pointer;
         }
+        body.main #mapActionButtons, body.main #svgHolder {
+          display:none;
+        }
+        body.screenshotting #mapActionButtons, body.screenshotting #dclick_prompt {
+          display:none !important;
+          visibility:hidden;
+        }
+        #screenshotPopup {
+          font-size:14px;
+        }
+        #screenshotPopup img {
+          margin-top:10px;
+          width:100%;
+          display:block;
+          border: 1px solid #eee;
+          border-radius: 3px;
+        }
         #blurb textarea {
           width: 100%;
           max-width:100%;
@@ -313,14 +373,14 @@
           box-sizing: border-box;
           font-size:12px;
         }
-        .infopopup span:first-child {
+        .infopopup em {
           font-style:italic;
           display:block;
           margin-bottom:15px;
           font-size:20px;
           font-weight:bold
         }
-        .infopopup span:last-child {
+        .infopopup span {
           display:block;
           max-height: 120px;
           overflow-y: auto;
@@ -332,6 +392,7 @@
           padding: 5px;
         }
       </style>
+
       <div id="svgHolder">
         <div id="dclick_prompt">Double-click to add a Node</div>
         <div id="svgBackground"></div>
@@ -351,8 +412,35 @@
       </div>
       <div id="overlay" style="display:none;position:absolute;top:0;left:0;height:100%;z-index:10">
 
+        <div id="main" style="background:#f4f4f4">
+          <div class="logo" style="margin-bottom:12px">DESMOG</div>
+          <div class="subtitle" style="margin-bottom:5px;">Open a Map:</div>
+          <div id="projectList">
+            <?
+            $mysqli = include "db_connect.php";
+            $maps = mysqli_query($mysqli, "SELECT id, title FROM maps WHERE deleted=0 ORDER BY updated_stamp DESC");
+            while ($row = mysqli_fetch_assoc($maps)) {
+              echo "<div data-value='{$row['id']}'>{$row['title']}</div>";
+            }
+            ?>
+          </div>
+          <div style="margin-top:20px">
+            <input id="createNewProject" class="myButton" type="button" value="Create New Map">
+          </div>
+        </div>
+
         <div id="project" style="background:rgba(244,244,244,0.97)">
           <div class="logo" style="margin-bottom:12px">DESMOG</div>
+          <div id="project_pre_save">
+            <div class="buttons" style="margin-top:20px;">
+              <div style="margin-bottom: 20px;font-size: 17px;">
+                <div style="font-weight:bold;">Preview Mode</div>
+                <div style="font-style:italic">You can change the social-media image size by altering the preview pane to the right (the default is recommended).</div>
+              </div>
+              <input id="finalSave" class="myButton" type="button" value="Publish this Map">
+              <input id="finalSaveCancel" class="myButton grayscale" type="button" value="Cancel">
+            </div>
+          </div>
           <div id="project_preview">
             <div class="buttons" style="margin-top:20px;">
               <div style="margin-bottom: 20px;font-size: 17px;font-style: italic;">
@@ -365,11 +453,11 @@
             <div class="fields">
               <div>
                 <div class="subtitle" style="margin-bottom:5px;">Map Title:</div>
-                <input id="projectTitle" type="text">
+                <input id="projectTitle" type="text" autocomplete="off">
               </div>
               <div>
                 <div class="subtitle" style="margin-bottom:5px;">Background Image (URL):</div>
-                <input id="projectBackgroundURL" type="text">
+                <input id="projectBackgroundURL" type="text" autocomplete="off">
               </div>
               <div>
                 <div class="subtitle" style="margin-bottom:7px;">Background Opacity:</div>
@@ -383,10 +471,28 @@
                 <div class="subtitle" style="margin-bottom:4px;">Arrow Colour:</div>
                 <div id="projectArrowColour"></div>
               </div>
+              <div id="projectLinkHolder">
+                <div class="subtitle" style="margin-bottom:4px;">
+                  Sharing Link:
+                  <img id="projectLinkCopy" src="images/copy.png">
+                  <span></span>
+                </div>
+                <div id="projectLink"></div>
+              </div>
+            </div>
+            <div id="advancedOptions" style="display: none; margin-left:2px;margin-top: 20px; font-size: 15px; color: rgb(34, 34, 34);">
+              <div class="subtitle" style="margin-bottom:7px">
+                Advanced Options:
+              </div>
+              <div style="font-size:11px">
+                <var id="graphDelete">Delete Map</var>
+              </div>
             </div>
             <div class="buttons" style="margin-top:30px;">
-              <input id="graphSave" class="myButton" type="button" value="Save" style="margin-right:6px">
-              <input id="graphPreview" class="myButton" type="button" value="Preview">
+              <input id="graphSave" class="myButton" type="button" value="Preview">
+              <input id="graphPreview" class="myButton" type="button" value="Preview" style="display:none">
+              <input id="graphClose" class="myButton grayscale" type="button" value="Cancel">
+              <input id="graphAdvanced" class="myButton grayscale" type="button" value="&#9660;" style="padding: 6px 8px;">
             </div>
           </div>
         </div>
@@ -409,11 +515,11 @@
             <div class="subtitle" style="margin-top:25px;margin-bottom:9px">
               Edit Short Description:
             </div>
-            <textarea id="blurbShort" style="height: 70px;"></textarea>
+            <textarea id="blurbShort" style="height: 45px;"></textarea>
             <div class="subtitle" style="margin-top:25px;margin-bottom:9px">
               Edit Long Description:
             </div>
-            <textarea id="blurbLong" style="height: 140px;"></textarea>
+            <textarea id="blurbLong" style="height: 120px;"></textarea>
           </div>
           <div id="shaper" style="margin-top:25px">
             <div class="subtitle" style="margin-bottom:9px">
@@ -446,12 +552,6 @@
           <div class="card" style="display:none;font-size:20px;margin-top:20px;">
             <div class="name"></div>
             <img src="#">
-            <div class="addcp">
-              <div class="subtitle" style="font-style:italic;margin-bottom:4px">
-                No image - select a colour:
-              </div>
-              <input id="colouriser" type="color" value="#f6fbff" style="width:100%;height:100px">
-            </div>
             <input id="nodeChosenButton" class="myButton" type="button" value="Add to Map" style="display:block;margin-top:20px">
           </div>
         </div>
@@ -462,10 +562,17 @@
 
     <div id="cover" style="display:none;position:absolute;cursor:alias;left:0;width:100%;top:0;height:100%;background:black;opacity:0.15;z-index:3"></div>
 
+    <div id="coverBlock" style="display:none;position:fixed;left:0;width:100%;top:0;height:100%;background:black;opacity:0.15;z-index:11"></div>
+
+
+    <script>
+      var loadMapId = false, isPreview = false;
+    </script>
     <script src="static/d3.v4.js" charset="utf-8"></script>
     <script src="static/LsDataSource.js"></script>
     <script src="static/jscolor.js"></script>
-    <script src="static/graph-creator-dv4.js"></script>
+    <script src="static/graph-creator-dv4.js?v=2"></script>
+    <script src="static/dom-to-image.js"></script>
 
 
   </body>

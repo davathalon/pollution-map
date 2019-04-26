@@ -5,7 +5,10 @@ document.onload = (function(d3, undefined){
   var GraphCreator = function(){
     var thisGraph = this;
 
-    thisGraph.preview = getvar("preview")==1;
+    thisGraph.storeId = "saved_graph3"; //token for localstorage
+    thisGraph.preview = isPreview;
+    thisGraph.mapId = loadMapId;
+
     if (thisGraph.preview) {
       $("body").addClass("preview");
     }
@@ -176,15 +179,15 @@ document.onload = (function(d3, undefined){
       thisGraph.recenter()
     }
 
-    thisGraph.load();
-    thisGraph.recenter()
+    //thisGraph.load();
+    //thisGraph.recenter()
 
   };
 
   /**** Static Functions ****/
 
   GraphCreator.prototype.recenter = function() {
-    if (!this.preview) return;
+  //  if (!this.preview) return;
     try {
       var padding = 25;
       var svg_width = $("svg").width();
@@ -288,7 +291,16 @@ document.onload = (function(d3, undefined){
       }
     });
 
-    $("#fsbutton").on("click", toggleFullScreen);
+    $("#fsButton").on("click", toggleFullScreen);
+    $("#shareButton").on("click", function() {
+      thisGraph.sharePopup();
+    });
+    $("#zoomInButton").on("click", function() {
+
+    });
+    $("#zoomOutButton").on("click", function() {
+
+    });
 
     /*window.onbeforeunload = function(){
       return "Make sure to save your graph locally before leaving :-)";
@@ -309,6 +321,39 @@ document.onload = (function(d3, undefined){
     nodeRadius: 50
   };
 
+  GraphCreator.prototype.isLocal = function() {
+    return window.location.origin=="http://www.desmog.local"
+  }
+
+
+  GraphCreator.prototype.sharePopup = function(){
+    var popup;
+    if (this.mapId) {
+      var thisGraph = this;
+      var url = thisGraph.get_project_url() ;
+      var share_url = thisGraph.get_project_url( thisGraph.isLocal() ? "https://superloop.co" : false ) ;
+      popup = $("#sharePopupContent").clone(true);
+      var copy_link_button = popup.find("#copy_link");
+
+      popup.find("#share_link_text").val(url);
+      copy_link_button.on("click", function() {
+        thisGraph.copyToClipboard(url);
+        copy_link_button.text("COPIED!");
+        setTimeout(function() {
+          copy_link_button.text("COPY")
+        }, 500);
+      });
+      popup.find("#facebookLink").attr("href", "https://www.facebook.com/sharer/sharer.php?u="+share_url);
+    } else {
+      popup = $("<div>").append("Sharing is only for live maps (because social media sites need access to the final URL). Publish this map first, and you can then view sharing on the direct link to the map.");
+    }
+    Swal.fire({
+      title: 'Share',
+      html: popup.get(0),
+      showCloseButton: true,
+      showConfirmButton: false
+    });
+  }
 
   // call to propagate changes to graph
   GraphCreator.prototype.updateGraph = function(){
@@ -534,8 +579,18 @@ document.onload = (function(d3, undefined){
   };
 
   GraphCreator.prototype.infoPopup = function(d){
-    var text = "";
-    if (d.blurb) text = "<div class='infopopup'><span>"+d.blurb.title+"</span><span>"+d.blurb.summary+"</span></div>";
+    var text = "<div class='infopopup'>";
+    if (d.blurb) {
+      text += "<em>";
+      if (d.blurb.title) {
+        text += d.blurb.title;
+      }
+      text += "</em>";
+      if (d.blurb.summary) {
+        text += "<span>"+d.blurb.summary+"</span>";
+      }
+    }
+    text += "</div>";
     myalert("<div style='color:#0164b3'>"+d.title+"</div>", text);
   }
 
@@ -620,6 +675,16 @@ document.onload = (function(d3, undefined){
     state.mouseDownNode = null;
     return;
 
+  }
+
+  GraphCreator.prototype.clickNodeById = function(id) {
+    var thisGraph = this;
+    d3.select("svg").select(".circles").selectAll("g").filter(function(d){
+      return d.id == id;
+    }).classed("selected", true).each(function(d) {
+      thisGraph.circleMouseUp(d3.select(this), d);
+    });
+    thisGraph.updateGraph();
   }
 
   GraphCreator.prototype.setSelected = function(nodes, b, skip) {
@@ -930,6 +995,49 @@ document.onload = (function(d3, undefined){
 
   /**** CUSTOM ****/
 
+  GraphCreator.prototype.serverSave = function( screenshot ) {
+    var thisGraph = this;
+    thisGraph.bodyloader(true);
+    var fail = function() {
+      myalert("Whoops", "There was an error, please try again later");
+    }
+    $.ajax({
+       url: "loader.php",
+       method: "POST",
+       dataType: "json",
+       data: {
+         action: "save",
+         title: thisGraph.project.meta().projectTitle,
+         config: localStorage.getItem(thisGraph.storeId),
+         screenshot: screenshot,
+         id: thisGraph.mapId || "" //if blank, is new
+       },
+       fail: fail,
+       success: function(response) {
+         if (response.success==1) {
+           if (response.mapId) {
+             thisGraph.mapId = response.mapId;
+           }
+           myalert("Map Saved", "Well done! The Map URL has been copied.", "success");
+           thisGraph.copyToClipboard( thisGraph.get_project_url() );
+           thisGraph.project.preview.stop();
+           thisGraph.project.build_link();
+           $("#graphAdvanced").show();
+         } else {
+           fail();
+         }
+       },
+       complete: function() {
+         thisGraph.coverblock(false);
+         thisGraph.bodyloader(false);
+       }
+    });
+  }
+
+  GraphCreator.prototype.coverblock = function(b) {
+    $("#coverBlock").toggle(b);
+  }
+
   GraphCreator.prototype.save = function() {
     if (this.preview) return;
     var saveEdges = [];
@@ -943,15 +1051,29 @@ document.onload = (function(d3, undefined){
       shapes: this.info._shaper.config.history,
       meta: this.project.meta()
     });
-    localStorage.setItem("saved_graph2", out );
+    localStorage.setItem(this.storeId, out );
   }
 
-  GraphCreator.prototype.load = function() {
+  GraphCreator.prototype.home = function() {
+    location.reload();
+  }
+
+  GraphCreator.prototype.load = function(id, config) {
     var thisGraph = this;
-    var data = localStorage.getItem("saved_graph2");
-    db("Loaded", data);
-    if (!data || JSON.parse(data).nodes.length==0) data = thisGraph.defaultData();
+    var data;
+    if (id) { //Load pre-made map
+      thisGraph.mapId = id;
+      data = config;
+    } else {
+      if (this.preview) { //Preview current map
+        data = localStorage.getItem(thisGraph.storeId);
+      } else { //Brand new map
+        data = thisGraph.defaultData();
+        $("#graphAdvanced").hide(); //No need for Delete Map option
+      }
+    }
     var jsonObj = JSON.parse(data);
+    db("Loaded", jsonObj);
     if (!jsonObj) return;
     thisGraph.nodes = jsonObj.nodes.filter(function(n) {
       return !n.staging;
@@ -966,14 +1088,84 @@ document.onload = (function(d3, undefined){
       };
     });
     thisGraph.edges = newEdges;
+
+    thisGraph.overlay.show(thisGraph.overlay.panel.PROJECT);
     thisGraph.project.meta( jsonObj.meta );
 
-    if (!thisGraph.nodes) $("#dclick_prompt").show();
+    if (thisGraph.nodes.length==0) $("#dclick_prompt").show();
 
-    thisGraph.setViewport(jsonObj.viewport);
+    //thisGraph.setViewport(jsonObj.viewport);
 
     thisGraph.updateGraph();
     thisGraph.updateGraph(); //requires twice to make brush work?
+
+    if (id || thisGraph.preview) thisGraph.recenter(); //new map shouldn't recenter (to a single node)
+
+  }
+
+
+  GraphCreator.prototype.createScreenshot = function( node, callback ) { //Called from parent frame
+    //First make sure all image nodes are local uris, as that's what's required to make a composite image
+    $("body").toggleClass("screenshotting", true);
+    var thisGraph = this;
+
+    var imageToURI = function(url, cb) {
+      var canvas = document.createElement('canvas')
+      var img = document.createElement('img')
+      img.onload = function () {
+        var ctx = canvas.getContext('2d');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        cb(null, canvas.toDataURL('image/png'))
+      }
+      img.ononerror = function () {
+        cb(new Error('FailedToLoadImage'))
+      }
+      if (!canvas.getContext) {
+        setTimeout(cb, 0, new Error('CanvasIsNotSupported'))
+      } else {
+        img.setAttribute('crossOrigin', 'anonymous')
+        img.src = url
+      }
+    }
+    var toImage = function(node) {
+      domtoimage.toJpeg($(node).get(0), {quality:0.92})
+       .then(function (dataUrl) {
+         callback(dataUrl);
+       })
+       .catch(function (err) {
+         db(err);
+       });
+    }
+    var done = function() {
+      toImage(node);
+      setTimeout(function() {
+        $("body").toggleClass("screenshotting", false);
+      });
+    }
+
+    var images = thisGraph.circles.filter(function(d) {
+      return !!d.image;
+    });
+    var fetched = 0, total = images.size();
+    if (total==0) {
+      done();
+    } else {
+      images.each(function(d) {
+        var that = this;
+        imageToURI('https://cors-anywhere.herokuapp.com/'+d.image, function (err, uri) {
+          fetched++;
+          if (!err) {
+            d3.select(that).select("image").attr("href", uri)
+            if (fetched==total) {
+              thisGraph.updateGraph();
+              done();
+            }
+          }
+        })
+      });
+    }
 
   }
 
@@ -990,11 +1182,12 @@ document.onload = (function(d3, undefined){
   }
 
   GraphCreator.prototype.defaultData = function() {
-    return window.JSON.stringify({"nodes":[{"id":53756,"title":"David Cameron","x":352.6651956068024,"y":342.590498119622,"image":"https://littlesis.org/images/profile/34/345b8bff6502dace207b886236f9d8521728e340_1273040317.png","dimensions":{"width":185,"height":250},"scale":0.8},{"id":67986,"title":"Boris Johnson","x":433.33350409878494,"y":454.6848950838606,"image":"https://littlesis.org/images/profile/4f/4f2ef90eafc8618280e50d564c3efe92.jpg","dimensions":{"width":200,"height":134},"scale":0.8},{"id":55778,"title":"Michael Gove","x":354.7014660418663,"y":204.50218062516754,"image":"https://littlesis.org/images/profile/ac/ac60d997b9dc853e6b0929023cea30cb.jpg","dimensions":{"width":150,"height":200},"scale":0.8},{"id":163547,"title":"Theresa May","x":438.6399015898029,"y":94.83509867484443,"image":"https://littlesis.org/images/profile/fe/fe61bc575dd06ce517d164f157aac13b.jpg","dimensions":{"width":189,"height":200},"scale":0.8},{"id":232409,"title":"Alexander Temerko","x":577.9181948296973,"y":499.61339363775727,"bg_color":"#D8CDFF","scale":0.8},{"id":276425,"title":"OGN Group","x":579.4036775499206,"y":58.80472109920541,"bg_color":"#D8CDFF","scale":0.8},{"id":91459,"title":"Random House, Inc.","x":577,"y":266,"bg_color":"#FFB8B8","scale":1.2},{"id":15108,"title":"Donald Trump","x":837,"y":266,"image":"https://littlesis.org/images/profile/76/76717d147aec6b8ed1a2e429e6d08a4af8335589_1226284399.png","dimensions":{"width":400,"height":280},"scale":1.2},{"id":326933,"title":"James Go","x":1019.5,"y":165,"bg_color":"#FFFFFF","scale":0.6},{"id":13377,"title":"John Kerry","x":1019.5,"y":245,"image":"https://littlesis.org/images/profile/18/188be541973eef0a5e97ab8b6ba85feb7de486d3_1226040039.png","dimensions":{"width":180,"height":225},"scale":0.6},{"id":234046,"title":"Hello Living","x":1019.5,"y":325,"bg_color":"#FFFFFF","scale":0.6},{"id":257423,"title":"Cambridge Analytica","x":1019.5,"y":405,"bg_color":"#FFFFFF","scale":0.6},{"id":228488,"title":"Test","x":1019.5,"y":85,"image":"https://littlesis.org/images/profile/a8/a82a358599d1836c47bacc277920136a.jpg","dimensions":{"width":200,"height":97},"scale":0.6},{"id":13443,"title":"John S. McCain III","x":1019.5,"y":485,"image":"https://littlesis.org/images/profile/40/409335aedacc7b30575f1012645976284ce7ff5b_1365622416.png","dimensions":{"width":380,"height":251},"scale":0.6}],"edges":[{"source":53756,"target":67986},{"source":67986,"target":163547},{"source":55778,"target":163547},{"source":163547,"target":232409},{"source":232409,"target":67986},{"source":276425,"target":163547},{"source":91459,"target":276425},{"source":91459,"target":232409},{"source":15108,"target":91459},{"source":15108,"target":13377},{"source":15108,"target":13443},{"source":257423,"target":15108},{"source":234046,"target":15108},{"source":326933,"target":15108},{"source":228488,"target":15108}],"viewport":{"k":1,"x":-152,"y":63},"shapes":{"circle_53756_55778_67986_163547_232409_276425":{"center":{"x":660.5430490768784,"y":276.6262151871647},"sliders":[220,1.56,0.82]},"horizontal_53756_55778_67986_163547_232409_276425":{"center":{"x":797.2088062456069,"y":217.77096629290963},"sliders":[100]},"vertical_53756_55778_67986_163547_232409_276425":{"center":{"x":774.2088062456069,"y":290.77096629290963},"sliders":[30]},"vertical_13377_234046_257423_326933":{"center":{"x":1076,"y":295},"sliders":[50]},"vertical_13377_13443_228488_234046_257423_326933":{"center":{"x":1019.5,"y":285},"sliders":[20]}},"meta":{"projectTitle":"Test Map","projectBackgroundURL":"http://s3.amazonaws.com/bw-2e2c4bf7ceaa4712a72dd5ee136dc9a8-bwcore/American-flag-photo.jpg","projectBackgroundOpacity":0.14,"projectArrowColour":"#656565","projectArrowWidth":2}});
+    return window.JSON.stringify({nodes:[], edges:[], meta:{}});
   }
 
   GraphCreator.prototype.Overlay = function() {
     var thisGraph = this;
+    thisGraph.main = thisGraph.MainPanel();
     thisGraph.adder = thisGraph.AdderPanel();
     thisGraph.info = thisGraph.InfoPanel();
     thisGraph.project = thisGraph.ProjectPanel();
@@ -1002,12 +1195,13 @@ document.onload = (function(d3, undefined){
       panel: {
         ADDER: "adder",
         INFO: "info",
-        PROJECT: "project"
+        PROJECT: "project",
+        MAIN: "main"
       },
       current: false,
       init: function() {
         $("#cover").on("click", self.forceClose);
-        self.show(self.panel.PROJECT);
+        self.show(self.panel.MAIN);
       },
       show: function(panel, cover_nodes) {
         $("#overlay > div").hide();
@@ -1015,6 +1209,10 @@ document.onload = (function(d3, undefined){
         if (cover_nodes) $("#cover").show();
         self.currentObject(panel).show();
         closeAllColourPickers();
+
+        if (self.last_panel) $("body").removeClass(self.last_panel);
+        self.last_panel = panel;
+        $("body").addClass(self.last_panel);
       },
       hide: function() {
         $("#cover").hide();
@@ -1037,6 +1235,9 @@ document.onload = (function(d3, undefined){
           break;
           case self.panel.PROJECT:
             return thisGraph.project;
+          break;
+          case self.panel.MAIN:
+            return thisGraph.main;
           break;
         }
       }
@@ -1066,7 +1267,6 @@ document.onload = (function(d3, undefined){
       },
       _init: function() {
         $( "#nodeChosenButton" ).on("click", self._nodeChosen);
-        self._colourpicker = new ColourPicker(false, false, "#colouriser", "#f6fbff");
         thisGraph.AutoSuggest(self);
         self._inited = true;
       },
@@ -1097,7 +1297,7 @@ document.onload = (function(d3, undefined){
             new_node.image = node_det.display.image;
             new_node.dimensions = self._staging.data.img;
           } else {
-            new_node.bg_color = self._colourpicker.val();
+            new_node.bg_color = thisGraph.info._colour.picker ? thisGraph.info._colour.picker.val() : "#f6fbff" ;
           }
           thisGraph.nodes.push(new_node);
 
@@ -1122,6 +1322,7 @@ document.onload = (function(d3, undefined){
           /********/
 
           thisGraph.updateGraph();
+          thisGraph.clickNodeById(node_det.id);
 
         }
       },
@@ -1337,6 +1538,56 @@ document.onload = (function(d3, undefined){
     return self;
   }
 
+  GraphCreator.prototype.previewFrame = function() {
+    return $("#piframe iframe").get(0).contentWindow.graph;
+  }
+
+  GraphCreator.prototype.MainPanel = function() {
+    var thisGraph = this;
+    var self = {
+      init: function() {
+        $("#projectList > div").each(function() {
+          $(this).on("click", self.chosen)
+        });
+        $("#createNewProject").on("click", function() {
+          thisGraph.load();
+        });
+      },
+      chosen: function() {
+        var mapId = $(this).data("value");
+        if (!mapId) return;
+        thisGraph.bodyloader(true, true);
+        var fail = function() {
+          myalert("Whoops", "There was an error, please try again later");
+        }
+        $.ajax({
+           url: "loader.php",
+           method: "POST",
+           dataType: "json",
+           data: {
+             action: "load",
+             id: mapId
+           },
+           fail: fail,
+           success: function(response) {
+             if (response.success==1) {
+               thisGraph.load(response.id, response.config);
+             } else {
+               fail();
+             }
+           },
+           complete: function() {
+             thisGraph.bodyloader(false, true);
+           }
+        });
+      },
+      show: function() { /*required*/
+        if (!self._inited) self.init();
+        $("#main").show();
+      }
+    }
+    return self;
+  }
 
   GraphCreator.prototype.ProjectPanel = function() {
     var thisGraph = this;
@@ -1368,6 +1619,11 @@ document.onload = (function(d3, undefined){
           thisGraph.save();
         }, "#projectArrowColour");
 
+        $("#projectLinkCopy").on("click", function() {
+          thisGraph.copyToClipboard( thisGraph.get_project_url() );
+          var feedback = $(this).parent().find("span");
+          feedback.text("Copied!").show().delay(800).fadeOut();
+        });
         $("#projectArrowWidth").slider({
           value: 5,
           min: 1,
@@ -1384,15 +1640,32 @@ document.onload = (function(d3, undefined){
           if (e.keyCode==13) $(this).blur(); //enter
         });
         self.preview.init();
-        $("#graphSave").on("click", function() {
-          myalert("Coming soon", false, "info");
-        });
         self._inited = true;
+      },
+      show: function() { /*required*/
+        if (!self._inited) self.init();
+        $("#project").show();
+      },
+      refresh: function() {/*Called after project metadata is set*/
+        self.background.image_update();
+        self.background.opacity_update();
+        self.background.arrow_colour_update();
+        self.background.arrow_width_update();
+        self.build_link();
+        if (!$("#projectTitle").val()) $("#projectTitle").focus();
+      },
+      build_link: function() {
+        if (thisGraph.mapId) {
+          var url = thisGraph.get_project_url();
+          $("#projectLink").html( $("<a>").attr("href", url).text(url).attr("target", "_blank") );
+        }
+        $("#projectLinkHolder").toggle(!!thisGraph.mapId);
       },
       preview: {
         default: {width:840, height:600},
-        start: function() {
-          $("#piframe").html( $("<div>").append($("<iframe>").attr("src","index.html?preview=1")) );
+        start: function( preSave ) {
+          preSave = preSave===true;
+          $("#piframe").html( $("<div>").append($("<iframe>").attr("src","../preview")) );
           $("#piframe > div").resizable({
             start: function() {
               $("#previewer").addClass("dragging");
@@ -1406,12 +1679,45 @@ document.onload = (function(d3, undefined){
           });
           self.preview.reset();
           $("body").toggleClass("previewHolder", true);
+          $("body").toggleClass("preSave", preSave);
+        },
+        saveStart: function() {
+          self.preview.start(true);
         },
         text_update: function(dim) {
           $("#pdimensions").text( dim.width +" x "+dim.height );
         },
         stop: function() {
           $("body").toggleClass("previewHolder", false);
+          thisGraph.recenter();
+        },
+        finalSave: function() {
+          if (!$.trim(thisGraph.project.meta().projectTitle)) {
+            self.preview.stop();
+            return myalert("Project Title Needed", "You must give your project a title before you can publish it.", "warning", function() {
+              $("#projectTitle").focus();
+            });
+          }
+          //Make screenshot first
+          thisGraph.coverblock(true);
+          thisGraph.bodyloader(true);
+          thisGraph.previewFrame().createScreenshot("#svgHolder", function( dataUrl ) {
+            thisGraph.bodyloader(false);
+            Swal.fire({
+              title: 'Are you sure?',
+              html: "<div id='screenshotPopup'>Everything is ready, including this image, which will be shown when this map's link is shared via social media. Are you ready to publish this map? <img src='"+dataUrl+"'></div>",
+              showCancelButton: true,
+              focusCancel: true,
+              confirmButtonText: 'Publish'
+            }).then((result) => {
+              if (result.value) {
+                thisGraph.serverSave( dataUrl );
+              } else {
+                thisGraph.coverblock(false);
+              }
+            });
+          });
+
         },
         reset: function() {
           $("#piframe > div").css(self.preview.default);
@@ -1419,19 +1725,60 @@ document.onload = (function(d3, undefined){
         },
         init: function() {
           $("#graphPreview").on("click", self.preview.start);
+          $("#graphSave").on("click", self.preview.saveStart);
           $("#exitPreviewMode").on("click", self.preview.stop);
           $("#pdimensions").on("click", self.preview.reset);
+          $("#finalSave").on("click", self.preview.finalSave)
+          $("#finalSaveCancel").on("click", self.preview.stop)
+          $("#graphClose").on("click", thisGraph.home);
+          $("#graphAdvanced").on("click", self.advancedOptions);
+          $("#graphDelete").on("click", self.deleteProject);
         }
       },
-      refresh: function() {/*Perform tasks related to current values*/
-        self.background.image_update();
-        self.background.opacity_update();
-        self.background.arrow_colour_update();
-        self.background.arrow_width_update();
+      deleteProject: function() {
+        if (!thisGraph.mapId) return;
+        Swal.fire({
+          title: 'Delete Project?',
+          html: "Are you sure you want to continue?",
+          type: "warning",
+          showCancelButton: true,
+          focusCancel: true,
+          confirmButtonColor: "#d80000",
+          confirmButtonText: 'Delete'
+        }).then((result) => {
+          if (result.value) {
+            thisGraph.bodyloader(true, true);
+            var fail = function() {
+              myalert("Whoops", "There was an error, please try again later");
+            }
+            $.ajax({
+               url: "loader.php",
+               method: "POST",
+               dataType: "json",
+               data: {
+                 action: "delete",
+                 id: thisGraph.mapId
+               },
+               fail: fail,
+               success: function(response) {
+                 if (response.success==1) {
+                   thisGraph.home();
+                 } else {
+                   fail();
+                 }
+               },
+               complete: function() {
+                 thisGraph.bodyloader(false, true);
+               }
+            });
+          }
+        });
       },
-      show: function() { /*required*/
-        if (!self._inited) self.init();
-        $("#project").show();
+      advancedOptions: function() {
+        var show = !$("#advancedOptions").is(":visible");
+        $("#graphAdvanced").val( show ? "\u25B2" : "\u25BC" );
+        $("#advancedOptions").toggle(show);
+        if (show) $("#project").scrollTop($("#project").get(0).scrollHeight);
       },
       background: {
         image_update: function() {
@@ -1440,7 +1787,7 @@ document.onload = (function(d3, undefined){
             getImageDimensions(url, function(d, success) {
               if (success===false) {
                 if (!thisGraph.preview && navigator.onLine) {
-                  myalert('Invalid Image', "Please try again with a different URL", 'warning');
+                  //myalert('Invalid Image', "Please try again with a different URL", 'warning'); //removed as it's blocking more important popups
                 }
                 $("#svgBackground").css("background-image", "none");
                 self.background.hide_image();
@@ -1464,7 +1811,9 @@ document.onload = (function(d3, undefined){
         },
         arrow_width_update: function() {
           var width = $("#projectArrowWidth").slider("value");
-          $("body").append("<style>path.link { stroke-width: "+width+"px}</style>");
+          var shadowWidth = (width*2);
+          if (shadowWidth<10) shadowWidth = 10;
+          $("body").append("<style>path.link { stroke-width: "+width+"px} .pathsShadow path.link { stroke-width: "+shadowWidth+"px}</style>");
         },
         colourTooDark: function(hexcolor){
           try { //colour input may return non-hex in other browsers
@@ -1553,7 +1902,6 @@ document.onload = (function(d3, undefined){
       _build: function() {
         if (!self._inited) self._init();
         $("#info #selection_title").text( self._groupValue("title") );
-        db("BUILDLING INFO");
         self._blurb.refresh();
         self._scaler.refresh();
         self._colour.refresh();
@@ -2076,6 +2424,11 @@ document.onload = (function(d3, undefined){
     return d3.select(selector).data()[0];
   }
 
+  GraphCreator.prototype.get_project_url = function( base ) {
+    var url = base || window.location.origin;
+    return url + "/map/"+this.mapId;
+  }
+
   GraphCreator.prototype.nodeExists = function( id ) {
     return $.inArray(id, this.getAllNodeIds()) != -1;
   }
@@ -2088,8 +2441,9 @@ document.onload = (function(d3, undefined){
     return out;
   }
 
-  GraphCreator.prototype.bodyloader = function(b) {
+  GraphCreator.prototype.bodyloader = function(b, cover) {
     $("body").toggleClass("loading", b!==false);
+    if (cover) this.coverblock(b);
   }
 
   GraphCreator.prototype.moveToFront = function(d) {
@@ -2099,6 +2453,15 @@ document.onload = (function(d3, undefined){
       }
     });
   };
+
+  GraphCreator.prototype.copyToClipboard = function(str) {
+    const el = document.createElement('textarea');
+    el.value = str;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+  }
 
   function getImageDimensions(url, foo) {
     var img = new Image();
@@ -2117,11 +2480,13 @@ document.onload = (function(d3, undefined){
     img.src = url;
   }
 
-  function myalert(title, text, icon) {
+  function myalert(title, text, icon, callback) {
     Swal.fire({
       title: title,
       html: text,
       type: icon
+    }).then((result) => {
+      if (callback) callback();
     });
   }
 
@@ -2168,7 +2533,7 @@ document.onload = (function(d3, undefined){
              var pair = vars[i].split("=");
              if(pair[0] == variable){return pair[1];}
      }
-     return(false);
+     return false;
   }
 
   function toggleFullScreen(event) {
@@ -2189,5 +2554,6 @@ document.onload = (function(d3, undefined){
   /**** MAIN ****/
 
   var graph = new GraphCreator();
+  window.graph = graph;
 
 })(window.d3);
