@@ -1,0 +1,8 @@
+php_value error_reporting 2039
+
+RewriteEngine On
+
+
+
+RewriteRule ^([0-9]+)/?$ live.php?id=$1 [L]
+RewriteRule ^preview/?$ live.php?preview=1 [L]
