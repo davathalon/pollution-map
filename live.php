@@ -1,12 +1,28 @@
 <?php
-$isPreview = !isset($_GET["id"]);
 $mysqli = include_once "editor/db_connect.php";
-$det = mysqli_fetch_assoc(mysqli_query($mysqli, "SELECT * FROM maps WHERE id=".intval($_GET["id"])));
+$isPreview = !isset($_GET["id"]);
+
+if (!$isPreview) {
+  $id = intval($_GET["id"]);
+  $det = mysqli_fetch_assoc(mysqli_query($mysqli, "SELECT * FROM maps WHERE id=$id"));
+  $title = $det["title"];
+} else {
+  $title = "Map Preview";
+}
 ?>
 <!DOCTYPE HTML>
 <html>
   <head>
-    <title>Desmog | <?=($isPreview?"Map Editor":$det["title"])?></title>
+    <title>Desmog | <?=$title?></title>
+
+    <?if (!$isPreview) {
+      $base_url = "https://" . $_SERVER[HTTP_HOST] . substr($_SERVER[REQUEST_URI], 0, strrpos($_SERVER[REQUEST_URI], "/"));?>
+      <meta property="og:title" content="<?=$title?>" />
+      <meta property="og:description" content="DeSmog UK was launched in September 2014 as an investigative media outlet dedicated to cutting through the spin clouding the debate on energy and environment in Britain. Since then, our team of journalists and researchers has become a go-to source for accurate, fact-based information regarding misinformation campaigns on climate science in the UK." />
+      <meta property="og:type" content="website" />
+      <meta property="og:image" content="<?=$base_url?>/share/<?=$id?>.jpg?v=<?=$det["version"]?>" />
+    <?}?>
+
     <link rel="stylesheet" href="editor/static/graph-creator.css" />
     <link rel="stylesheet" href="editor/static/jquery-ui.css">
     <style>
@@ -354,7 +370,7 @@ $det = mysqli_fetch_assoc(mysqli_query($mysqli, "SELECT * FROM maps WHERE id=".i
         }
         .infopopup span {
           display:block;
-          max-height: 120px;
+          /*max-height: 120px;*/
           overflow-y: auto;
           border: 1px solid #ddd;
           border-radius: 3px;
@@ -510,10 +526,6 @@ $det = mysqli_fetch_assoc(mysqli_query($mysqli, "SELECT * FROM maps WHERE id=".i
 
     <div id="coverBlock" style="display:none;position:fixed;left:0;width:100%;top:0;height:100%;background:black;opacity:0.15;z-index:11"></div>
 
-    <script>
-      var loadMapId = <?=json_encode($_GET["id"]?$_GET["id"]*1:false)?>;
-      var isPreview = <?=json_encode(isset($_GET["preview"]))?> || loadMapId!==false;
-    </script>
     <script src="editor/static/d3.v4.js" charset="utf-8"></script>
     <script src="editor/static/LsDataSource.js"></script>
     <script src="editor/static/jscolor.js"></script>
@@ -523,10 +535,10 @@ $det = mysqli_fetch_assoc(mysqli_query($mysqli, "SELECT * FROM maps WHERE id=".i
     <script src="https://unpkg.com/tippy.js@4"></script>
     <script>
       $(function() {
-        <?if (isset($_GET["id"])) {
-          echo "graph.load({$det['id']}, ".json_encode($det['config']).")";
+        <?if (!$isPreview) {
+          echo "graph.load({$det['id']}, {$det['version']}, ".json_encode($det['config']).")";
         } else {
-          echo "graph.load()";
+          echo "graph.preview()";
         }?>
       });
       tippy('[data-tippy-content]', {
@@ -559,10 +571,13 @@ $det = mysqli_fetch_assoc(mysqli_query($mysqli, "SELECT * FROM maps WHERE id=".i
       }
     </style>
     <div style="display:none">
+      <div id="embedPopupContent" style="padding:10px 20px 0">
+        <textarea readonly style="border:1px solid #ccc;width:100%;height:auto;font-size:15px;padding:10px"></textarea>
+      </div>
       <div id="sharePopupContent" style="padding:18px 0 10px">
         <div id="icons">
-          <div>
-            <div class="circle" style="border:1px solid #eee;background:#f4f4f4">
+          <div id="embedLink">
+            <div class="circle" style="border:1px solid #e4e4e4;background:#f4f4f4">
               <img src="https://image.flaticon.com/icons/svg/24/24207.svg" style="width: 32px;padding-top: 19px;opacity: 0.6;">
             </div>
             <div class="label">Embed</div>
@@ -573,15 +588,15 @@ $det = mysqli_fetch_assoc(mysqli_query($mysqli, "SELECT * FROM maps WHERE id=".i
             </div>
             <div class="label">Facebook</div>
           </a>
-          <div>
+          <a id="twitterLink" href="#" target="_blank">
             <div class="circle" style="border:1px solid #1aa1f1;background:#1aa1f1">
               <img src="https://cdn3.iconfinder.com/data/icons/picons-social/57/03-twitter-256.png" style="width: 42px;padding-top: 14px;filter:invert(100%)">
             </div>
             <div class="label">Twitter</div>
           </div>
-        </div>
+        </a>
         <div style="padding-top:25px;clear:both;position:relative">
-          <input id="share_link_text" type="text" value="" style="width:100%;box-sizing: border-box;font-size:15px;padding: 11px 15px;border:1px solid #eee;background:#f4f4f4;text-align: left;color: #0a0a0a;">
+          <input id="share_link_text" type="text" value="" style="width:100%;box-sizing: border-box;font-size:15px;padding: 11px 15px;border:1px solid #e4e4e4;background:#f4f4f4;text-align: left;color: #0a0a0a;">
           <div id="copy_link" style="position:absolute;right: 3px;bottom: 1px;color: #3a5996;padding:10px;font-size: 14px;cursor: pointer;">COPY</div>
         </div>
       </div>

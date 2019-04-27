@@ -461,7 +461,7 @@
         }
 
         function isLocalFile(url) {
-          var check = "http://www.desmog.local/";
+          var check = window.location.origin;
           if (url.substring(0, check.length)==check) return true;
           if (url.substring(0,4)=="http") return false;
           return true;

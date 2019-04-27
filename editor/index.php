@@ -1,3 +1,18 @@
+<?php
+session_start();
+
+if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
+  $_SESSION["logged_in"] = false;
+  unset($_SESSION["logged_in"]);
+  setcookie("logout", "", 1, "/");
+} else if (isset($_POST["username"])) {
+  if ($_POST["username"]=="admin" && $_POST["password"]=="admin") {
+    $_SESSION["logged_in"] = true;
+  } else {
+    $login_fail = true; //alert at EOF
+  }
+}
+?>
 <!DOCTYPE HTML>
 <html>
   <head>
@@ -28,9 +43,6 @@
       /*#project_non_preview .buttons input {
         padding:6px 16px;
       }*/
-      #projectLink {
-        margin-right:-200px;
-      }
       #projectLink a {
         font-size:11px
       }
@@ -249,11 +261,14 @@
           box-sizing:border-box;
           overflow-y:auto;
         }
-        #project input[type=text] {
+        #overlay input[type=text], #overlay input[type=password] {
           width: 100%;
           box-sizing: border-box;
           padding: 3px;
           font-size: 19px;
+        }
+        #login input[type=text], #login input[type=password] {
+          font-size:17px;
         }
         #svgHolder, #previewer {
           margin-left:300px;
@@ -382,7 +397,7 @@
         }
         .infopopup span {
           display:block;
-          max-height: 120px;
+          /*max-height: 120px;*/
           overflow-y: auto;
           border: 1px solid #ddd;
           border-radius: 3px;
@@ -398,7 +413,7 @@
         <div id="svgBackground"></div>
         <a href="https://desmog.co.uk" target="_blank" class="logo">DESMOG</a>
         <div id="mapActionButtons">
-          <img id="fsbutton" src="images/fullscreen.svg">
+          <img id="fsButton" src="images/fullscreen.svg">
         </div>
       </div>
       <div id="previewer">
@@ -417,16 +432,36 @@
           <div class="subtitle" style="margin-bottom:5px;">Open a Map:</div>
           <div id="projectList">
             <?
-            $mysqli = include "db_connect.php";
-            $maps = mysqli_query($mysqli, "SELECT id, title FROM maps WHERE deleted=0 ORDER BY updated_stamp DESC");
-            while ($row = mysqli_fetch_assoc($maps)) {
-              echo "<div data-value='{$row['id']}'>{$row['title']}</div>";
+            if ($_SESSION["logged_in"]) {
+              $mysqli = include "db_connect.php";
+              $maps = mysqli_query($mysqli, "SELECT id, title FROM maps WHERE deleted=0 ORDER BY updated_stamp DESC");
+              while ($row = mysqli_fetch_assoc($maps)) {
+                echo "<div data-value='{$row['id']}'>{$row['title']}</div>";
+              }
             }
             ?>
           </div>
           <div style="margin-top:20px">
-            <input id="createNewProject" class="myButton" type="button" value="Create New Map">
+            <input id="createNewProject" class="myButton" type="button" value="Create New Map" style="margin-right:8px">
+            <input id="logout" class="myButton grayscale" type="button" value="Logout">
           </div>
+        </div>
+
+        <div id="login" style="background:#f4f4f4">
+          <form action="./" method="post">
+            <div class="logo" style="margin-bottom:20px">DESMOG</div>
+            <div>
+              <div class="subtitle" style="margin-bottom:5px;">Username:</div>
+              <input id="username" name="username" type="text" autocomplete="off">
+            </div>
+            <div style="margin-top:12px">
+              <div class="subtitle" style="margin-bottom:5px;">Password:</div>
+              <input type="password" name="password" autocomplete="off">
+            </div>
+            <div style="margin-top:15px">
+              <input id="loginButton" class="myButton" type="submit" value="Login" style="padding: 6px 33px">
+            </div>
+          </form>
         </div>
 
         <div id="project" style="background:rgba(244,244,244,0.97)">
@@ -540,9 +575,12 @@
                 color:#999;
               }
             </style>
-            <div id="shaperOptions">
+            <div id="shaperOptions" style="padding-bottom:15px">
 
             </div>
+          </div>
+          <div style="margin-top:25px">
+            <input id="nodeOptionsBackButton" class="myButton grayscale" type="button" value="Back">
           </div>
         </div>
 
@@ -564,16 +602,23 @@
 
     <div id="coverBlock" style="display:none;position:fixed;left:0;width:100%;top:0;height:100%;background:black;opacity:0.15;z-index:11"></div>
 
-
-    <script>
-      var loadMapId = false, isPreview = false;
-    </script>
     <script src="static/d3.v4.js" charset="utf-8"></script>
     <script src="static/LsDataSource.js"></script>
     <script src="static/jscolor.js"></script>
     <script src="static/graph-creator-dv4.js?v=2"></script>
     <script src="static/dom-to-image.js"></script>
 
+    <script>
+      graph.setLoggedIn(<?=json_encode($_SESSION["logged_in"])?>);
+      graph.load(false);
+      <?if ($login_fail) {?>
+        Swal.fire({
+          title: "Incorrect Login",
+          html: "Please try again",
+          type: "warning"
+        });
+      <?}?>
+    </script>
 
   </body>
 

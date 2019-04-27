@@ -1,19 +1,25 @@
 document.onload = (function(d3, undefined){
   "use strict";
 
-  // define graphcreator object
-  var GraphCreator = function(){
+  var GraphCreator = function(){}
+
+  /**** Static Functions ****/
+
+  GraphCreator.prototype.init = function(id, preview) {
+
     var thisGraph = this;
 
-    thisGraph.storeId = "saved_graph3"; //token for localstorage
-    thisGraph.preview = isPreview;
-    thisGraph.mapId = loadMapId;
+    if (thisGraph.inited) return;
+    thisGraph.inited = true;
 
-    if (thisGraph.preview) {
+    thisGraph.userView = (id || preview);
+    thisGraph.storeId = "saved_graph3"; //token for localstorage
+
+    if (thisGraph.userView) {
       $("body").addClass("preview");
     }
 
-    thisGraph.toolbarWidth = thisGraph.preview ? 0 : 300;
+    thisGraph.toolbarWidth = thisGraph.userView ? 0 : 300;
 
     thisGraph.initDom();
     thisGraph.nodes = [];
@@ -96,7 +102,7 @@ document.onload = (function(d3, undefined){
         .attr('d', 'M0,0L0,0')
         .style('marker-end', 'url(#mark-end-arrow)');
 
-    if (!thisGraph.preview) {
+    if (!thisGraph.userView) {
       thisGraph.brush = thisGraph.buildBrush();
     }
     thisGraph.svgG.append("g").attr('class', 'paths');
@@ -116,7 +122,7 @@ document.onload = (function(d3, undefined){
           })
           .on("drag", function(d){
             // console.log('Draged beginn :', args);
-            if (thisGraph.preview) return;
+            if (thisGraph.userView) return;
             thisGraph.state.justDragged = true;
             thisGraph.dragmove.call(thisGraph, d, d3.select(this));
           })
@@ -143,35 +149,40 @@ document.onload = (function(d3, undefined){
       thisGraph.svgMouseUp.call(thisGraph, d);
     });
     thisGraph.svg.on("dblclick", function(d){
-      // console.log("svg mouse up");
-      if (thisGraph.preview) return;
-      thisGraph.svgDoubleClick.call(thisGraph, d);
+      if (!thisGraph.userView) {
+        thisGraph.svgDoubleClick.call(thisGraph, d);
+      }
     });
 
 
     //Zoom setup
     var dragSvg = d3.zoom().scaleExtent([1/4, 4])
-          .on("zoom", function(){
-            console.log('zoom');
-            if (false && d3.event.sourceEvent.shiftKey){
-              // TODO  the internal d3 state is still changing
-              return false;
-            } else {
-              thisGraph.zoomed.call(thisGraph);
-            }
-            return true;
-          })
-          .on("start", function(){
-            $("body").toggleClass("dragging", true);
-          })
-          .on("end", function(){
-            //console.log('zomme end');
-            $("body").toggleClass("dragging", false);
-            thisGraph.state.justScaleTransGraph = false;
-          });
-          //.on("zoom", thisGraph.zoomed.call(thisGraph));
+      .on("zoom", function(){
+        console.log('zoom');
+        if (false && d3.event.sourceEvent.shiftKey){
+          // TODO  the internal d3 state is still changing
+          return false;
+        } else {
+          thisGraph.zoomed.call(thisGraph);
+        }
+        return true;
+      })
+      .on("start", function(){
+        $("body").toggleClass("dragging", true);
+      })
+      .on("end", function(){
+        //console.log('zomme end');
+        $("body").toggleClass("dragging", false);
+        thisGraph.state.justScaleTransGraph = false;
+      });
+
     thisGraph.zoom = dragSvg;
-    thisGraph.svg.call(dragSvg).on("dblclick.zoom", null);
+    thisGraph.svg.call(dragSvg);
+    if (!thisGraph.userView) {
+      thisGraph.svg.on("dblclick.zoom", null);
+    }
+
+
 
     // listen for resize
     window.onresize = function() {
@@ -181,13 +192,10 @@ document.onload = (function(d3, undefined){
 
     //thisGraph.load();
     //thisGraph.recenter()
-
-  };
-
-  /**** Static Functions ****/
+  }
 
   GraphCreator.prototype.recenter = function() {
-  //  if (!this.preview) return;
+  //  if (!this.userView) return;
     try {
       var padding = 25;
       var svg_width = $("svg").width();
@@ -204,6 +212,16 @@ document.onload = (function(d3, undefined){
       transform = transform.translate(-box.x - box.width / 2, -box.y - box.height / 2);
       this.zoom.transform(this.svg, transform);
     } catch(err){}
+  }
+
+  GraphCreator.prototype.zoomIn = function() {
+    this.animation();
+    this.zoom.scaleBy(this.svg, 1.2);
+  }
+
+  GraphCreator.prototype.zoomOut = function() {
+    this.animation();
+    this.zoom.scaleBy(this.svg, 0.833);
   }
 
   GraphCreator.prototype.buildBrush = function() {
@@ -286,7 +304,7 @@ document.onload = (function(d3, undefined){
     });
 
     $(window).focus(function(e) {
-      if (!thisGraph.preview) {
+      if (!thisGraph.userView) {
         thisGraph.brush.show(false);
       }
     });
@@ -296,10 +314,10 @@ document.onload = (function(d3, undefined){
       thisGraph.sharePopup();
     });
     $("#zoomInButton").on("click", function() {
-
+      thisGraph.zoomIn();
     });
     $("#zoomOutButton").on("click", function() {
-
+      thisGraph.zoomOut();
     });
 
     /*window.onbeforeunload = function(){
@@ -322,7 +340,7 @@ document.onload = (function(d3, undefined){
   };
 
   GraphCreator.prototype.isLocal = function() {
-    return window.location.origin=="http://www.desmog.local"
+    return window.location.origin=="http://www.desmog.local" || window.location.origin=="http://desmog.local";
   }
 
 
@@ -330,8 +348,7 @@ document.onload = (function(d3, undefined){
     var popup;
     if (this.mapId) {
       var thisGraph = this;
-      var url = thisGraph.get_project_url() ;
-      var share_url = thisGraph.get_project_url( thisGraph.isLocal() ? "https://superloop.co" : false ) ;
+      var url = thisGraph.get_project_url(true) ;
       popup = $("#sharePopupContent").clone(true);
       var copy_link_button = popup.find("#copy_link");
 
@@ -343,7 +360,29 @@ document.onload = (function(d3, undefined){
           copy_link_button.text("COPY")
         }, 500);
       });
+
+      var share_url = encodeURIComponent(url);
+      var title = encodeURIComponent("Check this out: \""+thisGraph.project.meta().projectTitle+"\"");
+
       popup.find("#facebookLink").attr("href", "https://www.facebook.com/sharer/sharer.php?u="+share_url);
+      popup.find("#twitterLink").attr("href", "https://twitter.com/intent/tweet?text="+title+"&url="+share_url);
+
+      popup.find("#embedLink").on("click", function() {
+        var embed = $("#embedPopupContent").clone(true);
+        var code = '<iframe src="'+thisGraph.get_project_url()+'" width="840" height="600" frameborder="0" allowfullscreen></iframe>';
+        embed.find("textarea").val(code);
+        Swal.fire({
+          title: 'Embed',
+          html: embed.get(0),
+          showCloseButton: true,
+          confirmButtonText: "Copy Code"
+        }).then((result) => {
+          if (result.value) {
+            thisGraph.copyToClipboard( code );
+          }
+        });
+      });
+
     } else {
       popup = $("<div>").append("Sharing is only for live maps (because social media sites need access to the final URL). Publish this map first, and you can then view sharing on the direct link to the map.");
     }
@@ -540,7 +579,7 @@ document.onload = (function(d3, undefined){
     var thisGraph = this,
         state = thisGraph.state;
 
-    if (thisGraph.preview) return;
+    if (thisGraph.userView) return;
 
     closeAllColourPickers();
     d3.event.stopPropagation();
@@ -600,7 +639,7 @@ document.onload = (function(d3, undefined){
         state = thisGraph.state,
         consts = thisGraph.consts;
 
-    if (thisGraph.preview) return thisGraph.infoPopup(d);
+    if (thisGraph.userView) return thisGraph.infoPopup(d);
 
     // reset the states
     state.shiftNodeDrag = false;
@@ -688,7 +727,7 @@ document.onload = (function(d3, undefined){
   }
 
   GraphCreator.prototype.setSelected = function(nodes, b, skip) {
-    if (this.preview) return;
+    if (this.userView) return;
     var selectClass = this.consts.selectedClass;
     if (b=="toggle") {
       nodes.each(function() {
@@ -1012,11 +1051,12 @@ document.onload = (function(d3, undefined){
          screenshot: screenshot,
          id: thisGraph.mapId || "" //if blank, is new
        },
-       fail: fail,
+       error: fail,
        success: function(response) {
          if (response.success==1) {
-           if (response.mapId) {
-             thisGraph.mapId = response.mapId;
+           if (response.id) {
+             thisGraph.mapId = response.id;
+             thisGraph.version = response.version;
            }
            myalert("Map Saved", "Well done! The Map URL has been copied.", "success");
            thisGraph.copyToClipboard( thisGraph.get_project_url() );
@@ -1039,7 +1079,7 @@ document.onload = (function(d3, undefined){
   }
 
   GraphCreator.prototype.save = function() {
-    if (this.preview) return;
+    if (this.userView) return;
     var saveEdges = [];
     this.edges.forEach(function(val, i){
       saveEdges.push({source: val.source.id, target: val.target.id, });
@@ -1058,14 +1098,23 @@ document.onload = (function(d3, undefined){
     location.reload();
   }
 
-  GraphCreator.prototype.load = function(id, config) {
+  GraphCreator.prototype.preview = function() {
+    this.load(false, false, false, true);
+  }
+
+  GraphCreator.prototype.load = function(id, version, config, preview) {
+
     var thisGraph = this;
+    thisGraph.init(id, preview);
+    if (id===false && !preview) return; //main
+
     var data;
     if (id) { //Load pre-made map
       thisGraph.mapId = id;
+      thisGraph.version = version || 0;
       data = config;
     } else {
-      if (this.preview) { //Preview current map
+      if (preview) { //Preview current map
         data = localStorage.getItem(thisGraph.storeId);
       } else { //Brand new map
         data = thisGraph.defaultData();
@@ -1099,10 +1148,13 @@ document.onload = (function(d3, undefined){
     thisGraph.updateGraph();
     thisGraph.updateGraph(); //requires twice to make brush work?
 
-    if (id || thisGraph.preview) thisGraph.recenter(); //new map shouldn't recenter (to a single node)
+    if (id || thisGraph.userView) thisGraph.recenter(); //new map shouldn't recenter (to a single node)
 
   }
 
+  GraphCreator.prototype.setLoggedIn = function(b) {
+    this.loggedIn = b;
+  }
 
   GraphCreator.prototype.createScreenshot = function( node, callback ) { //Called from parent frame
     //First make sure all image nodes are local uris, as that's what's required to make a composite image
@@ -1188,6 +1240,7 @@ document.onload = (function(d3, undefined){
   GraphCreator.prototype.Overlay = function() {
     var thisGraph = this;
     thisGraph.main = thisGraph.MainPanel();
+    thisGraph.login = thisGraph.LoginPanel();
     thisGraph.adder = thisGraph.AdderPanel();
     thisGraph.info = thisGraph.InfoPanel();
     thisGraph.project = thisGraph.ProjectPanel();
@@ -1196,12 +1249,13 @@ document.onload = (function(d3, undefined){
         ADDER: "adder",
         INFO: "info",
         PROJECT: "project",
-        MAIN: "main"
+        MAIN: "main",
+        LOGIN: "login"
       },
       current: false,
       init: function() {
         $("#cover").on("click", self.forceClose);
-        self.show(self.panel.MAIN);
+        self.show( thisGraph.loggedIn ? self.panel.MAIN : self.panel.LOGIN );
       },
       show: function(panel, cover_nodes) {
         $("#overlay > div").hide();
@@ -1238,6 +1292,9 @@ document.onload = (function(d3, undefined){
           break;
           case self.panel.MAIN:
             return thisGraph.main;
+          break;
+          case self.panel.LOGIN:
+            return thisGraph.login;
           break;
         }
       }
@@ -1552,6 +1609,10 @@ document.onload = (function(d3, undefined){
         $("#createNewProject").on("click", function() {
           thisGraph.load();
         });
+        $("#logout").on("click", function() {
+          setCookie("logout", 1, 9999999999);
+          location.href = location.href; //seems like a hack, but location.reload sends POST vars again, which I don't want!
+        });
       },
       chosen: function() {
         var mapId = $(this).data("value");
@@ -1568,10 +1629,10 @@ document.onload = (function(d3, undefined){
              action: "load",
              id: mapId
            },
-           fail: fail,
+           error: fail,
            success: function(response) {
              if (response.success==1) {
-               thisGraph.load(response.id, response.config);
+               thisGraph.load(response.id, response.version, response.config);
              } else {
                fail();
              }
@@ -1584,6 +1645,17 @@ document.onload = (function(d3, undefined){
       show: function() { /*required*/
         if (!self._inited) self.init();
         $("#main").show();
+      }
+    }
+    return self;
+  }
+
+  GraphCreator.prototype.LoginPanel = function() {
+    var thisGraph = this;
+    var self = {
+      show: function() { /*required*/
+        $("#login").show();
+        $("#username").focus();
       }
     }
     return self;
@@ -1759,7 +1831,7 @@ document.onload = (function(d3, undefined){
                  action: "delete",
                  id: thisGraph.mapId
                },
-               fail: fail,
+               error: fail,
                success: function(response) {
                  if (response.success==1) {
                    thisGraph.home();
@@ -1786,7 +1858,7 @@ document.onload = (function(d3, undefined){
           if (url) {
             getImageDimensions(url, function(d, success) {
               if (success===false) {
-                if (!thisGraph.preview && navigator.onLine) {
+                if (!thisGraph.userView && navigator.onLine) {
                   //myalert('Invalid Image', "Please try again with a different URL", 'warning'); //removed as it's blocking more important popups
                 }
                 $("#svgBackground").css("background-image", "none");
@@ -1972,6 +2044,9 @@ document.onload = (function(d3, undefined){
         }
       },
       _init: function() {
+        $("#nodeOptionsBackButton").on("click", function() {
+          thisGraph.clearSelection();
+        });
         self._scaler.init();
         self._colour.init();
         self._shaper.init();
@@ -2286,17 +2361,10 @@ document.onload = (function(d3, undefined){
             return $("<option>").text(text).val(name);
           },
           change: function() {
-            self._shaper.options.animate();
+            thisGraph.animation();
             self._shaper.sliders.select( self._shaper.options.val() );
             self._shaper.config.load();
             self._shaper.update();
-          },
-          animate: function() {
-            $("body").addClass("animate");
-            if (self._shaper.animateWait) clearTimeout(self._shaper.animateWait);
-            self._shaper.animateWait = setTimeout(function() {
-              $("body").removeClass("animate");
-            }, 250);
           }
         },
         sliders: {
@@ -2420,13 +2488,25 @@ document.onload = (function(d3, undefined){
     return self;
   }
 
+  GraphCreator.prototype.animation = function() {
+    $("body").addClass("animate");
+    if (this.animateWait) clearTimeout(this.animateWait);
+    this.animateWait = setTimeout(function() {
+      $("body").removeClass("animate");
+    }, 250);
+  }
+
   GraphCreator.prototype.data = function(selector) {
     return d3.select(selector).data()[0];
   }
 
-  GraphCreator.prototype.get_project_url = function( base ) {
-    var url = base || window.location.origin;
-    return url + "/map/"+this.mapId;
+  GraphCreator.prototype.get_project_url = function( include_version ) {
+    var url = location.href;
+    if (!this.userView) url = url.slice(0, -1); //remove trailing slash
+    url = url.substr(0, url.lastIndexOf("/")); //everything up to last slash for the base url
+    url += "/" + this.mapId;
+    if (include_version && this.version>0) url += "." + this.version;
+    return url;
   }
 
   GraphCreator.prototype.nodeExists = function( id ) {
@@ -2526,14 +2606,11 @@ document.onload = (function(d3, undefined){
     this.init();
   }
 
-  function getvar(variable) {
-     var query = window.location.search.substring(1);
-     var vars = query.split("&");
-     for (var i=0;i<vars.length;i++) {
-             var pair = vars[i].split("=");
-             if(pair[0] == variable){return pair[1];}
-     }
-     return false;
+  function setCookie(cname, cvalue, seconds) {
+    var d = new Date();
+    d.setTime(d.getTime() + seconds);
+    var expires = "expires="+ d.toUTCString();
+    document.cookie = cname + "=" + cvalue + ";" + expires + ";path=/";
   }
 
   function toggleFullScreen(event) {
@@ -2551,8 +2628,7 @@ document.onload = (function(d3, undefined){
   	isFullscreen ? document.cancelFullScreen() : element.requestFullScreen();
   }
 
-  /**** MAIN ****/
-
+  /** Main **/
   var graph = new GraphCreator();
   window.graph = graph;
 

@@ -11,6 +11,7 @@ function db_connect() {
     $mysqli = mysqli_connect("localhost", "root", "wickster", "desmog_local", 3306);
   } else {
     //Connect to remote DB
+    $mysqli = mysqli_connect("localhost", "root", "W1ckster;", "desmog", 3306);
   }
   if (mysqli_connect_errno($mysqli))  {
   	die("Failed to connect to MySQL: " . mysqli_connect_error());
