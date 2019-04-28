@@ -14,6 +14,7 @@ document.onload = (function(d3, undefined){
 
     thisGraph.userView = (id || preview);
     thisGraph.storeId = "saved_graph3"; //token for localstorage
+    thisGraph.edge_master = thisGraph.EdgeMaster();
 
     if (thisGraph.userView) {
       $("body").addClass("preview");
@@ -216,12 +217,12 @@ document.onload = (function(d3, undefined){
 
   GraphCreator.prototype.zoomIn = function() {
     this.animation();
-    this.zoom.scaleBy(this.svg, 1.2);
+    this.zoom.scaleBy(this.svg, 1.3);
   }
 
   GraphCreator.prototype.zoomOut = function() {
     this.animation();
-    this.zoom.scaleBy(this.svg, 0.833);
+    this.zoom.scaleBy(this.svg, 0.77);
   }
 
   GraphCreator.prototype.buildBrush = function() {
@@ -575,27 +576,58 @@ document.onload = (function(d3, undefined){
 
   /**** Function for the path mouse evnet  ****/
 
+  GraphCreator.prototype.pathPopup = function(d) {
+    db(d);
+    var html = $("#hidden #PathFeedback").clone(true);
+    html.find(".round:first-child").text(d.source.title);
+    html.find(".round:last-child").text(d.target.title);
+    var list = html.find(".roles");
+    d.info.list.forEach(function(p) {
+      if (!$.trim(p.label)) return;
+      var out = $("<div>").append(p.label);
+      if (p.arrow==1) out.append('<img src="editor/images/right.svg" class="left">');
+      if (p.arrow==2) out.append('<img src="editor/images/left.svg" class="right">');
+      list.append(out);
+    })
+    Swal.fire({
+      //title: 'Relationship',
+      html: html.get(0),
+      //showCloseButton: true,
+      showConfirmButton: false,
+      customClass: "nopadding"
+    });
+  }
+
   GraphCreator.prototype.pathMouseDown = function(d3path, d){
     var thisGraph = this,
         state = thisGraph.state;
 
-    if (thisGraph.userView) return;
+    if (thisGraph.userView) {
 
-    closeAllColourPickers();
-    d3.event.stopPropagation();
-    state.mouseDownLink = d;
+      thisGraph.pathPopup(d);
 
-    thisGraph.clearSelection();
+    } else {
 
-    //d3Path.classed(thisGraph.consts.selectedClass, true);
+      closeAllColourPickers();
 
-    var prevEdge = state.selectedEdge;
-    if (!prevEdge || prevEdge !== d){
-      thisGraph.replaceSelectEdge(d3path, d);
-    } else{
-      thisGraph.removeSelectFromEdge();
+      if (d3.event.stopPropagation) d3.event.stopPropagation();
+
+      state.mouseDownLink = d;
+
+      thisGraph.clearSelection();
+
+      var prevEdge = state.selectedEdge;
+      if (!prevEdge || prevEdge !== d){
+        thisGraph.replaceSelectEdge(d3path, d);
+      } else{
+        thisGraph.removeSelectFromEdge(true);
+      }
+
+      this.edgeInfo.set(d);
+
     }
-  };
+
+  }
 
 
   /**** Function for the circle mouse evnet  ****/
@@ -658,46 +690,25 @@ document.onload = (function(d3, undefined){
 
     if (mouseDownNode !== targetNode){
       // we're in a different node: create new edge for mousedown edge and add to graph
-      var newEdge = {source: mouseDownNode, target: targetNode};
-      // check ob the new edge already exist
 
-      var d3Path = d3.select("svg").select(".paths").selectAll("path");
-
-      thisGraph.paths = d3Path.data(thisGraph.edges, function(d){
-        return String(d.source.id) + "+" + String(d.target.id);
+      var edge = thisGraph.edge_master.addSingle({
+        source: mouseDownNode.id,
+        target: targetNode.id,
+        label: "Acquaintances",
+        arrow: 0
       });
-
-      var filtRes = thisGraph.paths.filter(function(d){
-        console.log('Filter the path :', d.source, d.target, newEdge.target, newEdge.source);
-        if ( d.source === newEdge.target && d.target === newEdge.source ){
-          // array.splice(index, howmany, item1, ....., itemX), remove d in edges array
-          thisGraph.edges.splice(thisGraph.edges.indexOf(d), 1);
-          console.log('Remove the same path:', thisGraph.edges);
-        }
-        // 设置Filter是否返回结果的条件，满足这个条件则返回值，然后filtRes.size()的结果增加一个
-        return d.source === newEdge.source && d.target === newEdge.target;
-      });
-
-      // update the graph after filter the edges
       thisGraph.updateGraph();
+      thisGraph.pathMouseDown( edge.node(), edge.directEdge );
 
-      // filtRes.size() record the result set of filter
-      console.log('Filter result size :', filtRes.size());
-      if (!filtRes.size()){
-        //draw a new path
-        console.log('Draw a new Path');
-        thisGraph.edges.push(newEdge);
-        thisGraph.updateGraph();
-      }
-    } else{
+    } else {
       // we're in the same node
       if (thisGraph.definitelyDragged(d)) {
         state.justDragged = false;
         thisGraph.save(); //node was moved, trigger saving
       } else {
 
-        thisGraph.removeSelectFromEdge();
-        if (d3.event.sourceEvent.ctrlKey || thisGraph.state.ctrlDown) {
+        thisGraph.removeSelectFromEdge(true);
+        if ((d3.event.sourceEvent && d3.event.sourceEvent.ctrlKey) || thisGraph.state.ctrlDown) {
           thisGraph.setSelected(d3node, "toggle");
         } else {
           if (thisGraph.getSelected().size()==1 && d3node.classed(consts.selectedClass)) {
@@ -738,7 +749,7 @@ document.onload = (function(d3, undefined){
       nodes.classed(selectClass, b);
     }
     if (!skip) this.info.update();
-    this.removeSelectFromEdge();
+    this.removeSelectFromEdge(true);
   }
 
   GraphCreator.prototype.clearSelection = function(skip){
@@ -770,14 +781,16 @@ document.onload = (function(d3, undefined){
   GraphCreator.prototype.replaceSelectEdge = function(d3Path, edgeData){
     console.log(" replace selected edge ");
     var thisGraph = this;
+    db("||||||", d3Path);
     d3Path.classed(thisGraph.consts.selectedClass, true);
-    thisGraph.removeSelectFromEdge();
+    thisGraph.removeSelectFromEdge(true);
     thisGraph.state.selectedEdge = edgeData;
   };
 
-  GraphCreator.prototype.removeSelectFromEdge = function(){
+  GraphCreator.prototype.removeSelectFromEdge = function( anotherPanelOpening ){
     var thisGraph = this;
     if (!thisGraph.state.selectedEdge) return;
+    if (!anotherPanelOpening) thisGraph.overlay.hide();
     console.log(" remove select state from edge ");
     var d3Path = d3.select("svg").select(".paths").selectAll("path");
     d3Path.filter(function(cd){
@@ -801,6 +814,7 @@ document.onload = (function(d3, undefined){
         });
     toSplice.map(function(l) {
       thisGraph.edges.splice(thisGraph.edges.indexOf(l), 1);
+      thisGraph.edge_master.kill(l);
     });
   };
 
@@ -991,13 +1005,23 @@ document.onload = (function(d3, undefined){
           });
           this.updateGraph();
         } else if (state.selectedEdge){
-          thisGraph.edges.splice(thisGraph.edges.indexOf(state.selectedEdge), 1);
-          state.selectedEdge = null;
-          thisGraph.updateGraph();
+          thisGraph.deleteSelectedEdge();
         }
       break;
     }
   };
+
+  GraphCreator.prototype.deleteSelectedEdge = function() {
+    var thisGraph = this, state = thisGraph.state;
+    if (state.selectedEdge) {
+      thisGraph.edges.splice(thisGraph.edges.indexOf(state.selectedEdge), 1);
+      db(":::::::",state.selectedEdge.info);
+      thisGraph.edge_master.kill( state.selectedEdge );
+      state.selectedEdge = null;
+      thisGraph.overlay.hide();
+      thisGraph.updateGraph();
+    }
+  }
 
   GraphCreator.prototype.svgKeyUp = function() {
     this.state.lastKeyDown = -1;
@@ -1080,13 +1104,9 @@ document.onload = (function(d3, undefined){
 
   GraphCreator.prototype.save = function() {
     if (this.userView) return;
-    var saveEdges = [];
-    this.edges.forEach(function(val, i){
-      saveEdges.push({source: val.source.id, target: val.target.id, });
-    });
     var out = window.JSON.stringify({
       "nodes": this.nodes,
-      "edges": saveEdges,
+      "edges": this.edge_master.saveFormat(),
       viewport: this.state.transform,
       shapes: this.info._shaper.config.history,
       meta: this.project.meta()
@@ -1122,21 +1142,16 @@ document.onload = (function(d3, undefined){
       }
     }
     var jsonObj = JSON.parse(data);
-    db("Loaded", jsonObj);
     if (!jsonObj) return;
+    db("Loaded", jsonObj);
+
     thisGraph.nodes = jsonObj.nodes.filter(function(n) {
       return !n.staging;
     });
-    thisGraph.info._shaper.config.history = jsonObj.shapes;
-    var newEdges = jsonObj.edges;
 
-    newEdges.forEach(function(e, i){
-      newEdges[i] = {
-        source: thisGraph.nodes.filter(function(n){return n.id == e.source;})[0],
-        target: thisGraph.nodes.filter(function(n){return n.id == e.target;})[0]
-      };
-    });
-    thisGraph.edges = newEdges;
+    thisGraph.info._shaper.config.history = jsonObj.shapes || {};
+
+    thisGraph.edge_master.addEdges(jsonObj.edges);
 
     thisGraph.overlay.show(thisGraph.overlay.panel.PROJECT);
     thisGraph.project.meta( jsonObj.meta );
@@ -1243,6 +1258,7 @@ document.onload = (function(d3, undefined){
     thisGraph.login = thisGraph.LoginPanel();
     thisGraph.adder = thisGraph.AdderPanel();
     thisGraph.info = thisGraph.InfoPanel();
+    thisGraph.edgeInfo = thisGraph.EdgeInfoPanel();
     thisGraph.project = thisGraph.ProjectPanel();
     var self = {
       panel: {
@@ -1250,7 +1266,8 @@ document.onload = (function(d3, undefined){
         INFO: "info",
         PROJECT: "project",
         MAIN: "main",
-        LOGIN: "login"
+        LOGIN: "login",
+        EDGE: "edge"
       },
       current: false,
       init: function() {
@@ -1295,6 +1312,9 @@ document.onload = (function(d3, undefined){
           break;
           case self.panel.LOGIN:
             return thisGraph.login;
+          break;
+          case self.panel.EDGE:
+            return thisGraph.edgeInfo;
           break;
         }
       }
@@ -1357,28 +1377,9 @@ document.onload = (function(d3, undefined){
             new_node.bg_color = thisGraph.info._colour.picker ? thisGraph.info._colour.picker.val() : "#f6fbff" ;
           }
           thisGraph.nodes.push(new_node);
-
-          db("New Edges", self._staging.data.edges);
-          for (var i in self._staging.data.edges) {
-            var edge_det = self._staging.data.edges[i];
-            var other_id = edge_det.node1_id==new_node.id ? edge_det.node2_id : edge_det.node1_id;
-            var target_node = d3.select("#Node"+other_id).data()[0];
-
-            var new_edge = {};
-            new_edge.source = edge_det.node1_id==new_node.id ? new_node : target_node ;
-            new_edge.target = edge_det.node2_id==new_node.id ? new_node : target_node ;
-            thisGraph.edges.push(new_edge);
-          }
-
-          /*** Temporary hack to remove multiple relationships between 2 nodes ***/
-          thisGraph.edges = thisGraph.edges.filter((thing,index) => {
-            return index === thisGraph.edges.findIndex(obj => {
-              return JSON.stringify(obj) === JSON.stringify(thing);
-            });
-          });
-          /********/
-
+          thisGraph.edge_master.addLittleSisEdges( self._staging.data.edges );
           thisGraph.updateGraph();
+
           thisGraph.clickNodeById(node_det.id);
 
         }
@@ -1454,6 +1455,131 @@ document.onload = (function(d3, undefined){
             }
           });
         }
+      }
+    }
+    return self;
+  }
+
+  GraphCreator.prototype.EdgeMaster = function () {
+    var thisGraph = this;
+    var self = {
+      list: [],
+      addEdges: function( edges ) {
+        for (var i in edges) {
+          self.addSingle(edges[i]);
+        }
+      },
+      addLittleSisEdges: function( edges ) {
+        //It's in a funky format, clean the edges and reduce to standard this class uses
+        edges.forEach(function(e) {
+          var arrow = (!e.display.arrow) ? 0 : ((e.display.arrow=="1->2")? 1 : 2) ;
+          self.addSingle({
+            source: e.node1_id,
+            target: e.node2_id,
+            label: e.display.label,
+            arrow: arrow
+          });
+        });
+      },
+      addSingle: function( edge ) {
+        var exists = self.exists(edge);
+        if (!exists) {
+          exists = new self.Edge( edge );
+          self.list.push(exists);
+        }
+        exists.add( edge );
+        return exists;
+      },
+      saveFormat: function() {
+        var out = [];
+        self.list.forEach(function(e) {
+          out = out.concat(e.saveFormat());
+        });
+        return out;
+      },
+      exists: function( edge ) {
+        for (var i in self.list) {
+          if (self.list[i].is(edge.source, edge.target)) {
+            return self.list[i];
+          }
+        }
+        return false;
+      },
+      kill: function( e ) {
+        var edge = e.info;
+        for (var i in self.list) {
+          if (self.list[i]==edge) {
+            self.list.splice(i, 1);
+            return;
+          }
+        }
+      },
+      Edge: function(edge_det) {
+        var me = this;
+        me.list = [];
+        me.source_id = edge_det.source;
+        me.target_id = edge_det.target;
+        me.is = function( source_id, target_id ) {
+          return ( (me.source_id==source_id && me.target_id==target_id)
+              || (me.source_id==target_id && me.target_id==source_id)
+          )
+        }
+        me.add = function(edge) { /*relationship info*/
+          var arrow = edge.arrow;
+          if (edge.source!=me.source_id) {
+            if (arrow==1) {
+              arrow = 2;
+            } else if (arrow==2) {
+              arrow = 1;
+            }
+          }
+          var out = {
+            arrow: arrow,
+            label: edge.label
+          }
+          me.list.push(out);
+          return out;
+        }
+        me.remove = function( data ) {
+          for (var i in me.list) {
+            if (me.list[i]==data) {
+              me.list.splice(i, 1);
+              if (me.list.length==0) {
+                thisGraph.deleteSelectedEdge();
+              }
+              return;
+            }
+          }
+        }
+        me.node = function() {
+          return d3.select("#Path_"+me.source_id+"_"+me.target_id);
+        }
+        me.init = function() { /*graph connection info*/
+          me.directEdge = {
+            source: me.findNodeDataById( me.source_id ),
+            target: me.findNodeDataById( me.target_id ),
+            info: me
+          }
+          thisGraph.edges.push( me.directEdge );
+        }
+        me.saveFormat = function() {
+          var out = [];
+          for (var i in me.list) {
+            out.push({
+              source: me.source_id,
+              target: me.target_id,
+              label: me.list[i].label,
+              arrow: me.list[i].arrow
+            });
+          }
+          return out;
+        }
+        me.findNodeDataById = function( id ) {
+          for (var i in thisGraph.nodes) {
+            if (thisGraph.nodes[i].id==id) return thisGraph.nodes[i];
+          }
+        }
+        me.init();
       }
     }
     return self;
@@ -1653,9 +1779,9 @@ document.onload = (function(d3, undefined){
   GraphCreator.prototype.LoginPanel = function() {
     var thisGraph = this;
     var self = {
-      show: function() { /*required*/
+      show: function() {
         $("#login").show();
-        $("#username").focus();
+        //$("#username").focus();
       }
     }
     return self;
@@ -1754,6 +1880,7 @@ document.onload = (function(d3, undefined){
           $("body").toggleClass("preSave", preSave);
         },
         saveStart: function() {
+          thisGraph.save();
           self.preview.start(true);
         },
         text_update: function(dim) {
@@ -1942,6 +2069,83 @@ document.onload = (function(d3, undefined){
           }
           db(out);
           return out;
+        }
+      }
+    }
+    return self;
+  }
+
+  GraphCreator.prototype.EdgeInfoPanel = function() {
+    var thisGraph = this;
+    var self = {
+      show: function() {
+        if (!self.inited) self.init();
+        $("#edgeInfo").show();
+      },
+      set: function( r ) {
+        self.relationships = [];
+        self.currentEdge = r.info;
+        $("#relationshipFromName").text( r.source.title );
+        $("#relationshipToName").text( r.target.title );
+        $("#relationshipList").html("");
+
+        for (var i in r.info.list) {
+          self.add( r.info.list[i] );
+        }
+        thisGraph.overlay.show(thisGraph.overlay.panel.EDGE);
+      },
+      add: function( n ) {
+        var newRel = new self.relationship( n );
+        $("#relationshipList").append( newRel.build() );
+        self.relationships.push( newRel );
+      },
+      addBlankNode: function() {
+        var directLinkToData = self.currentEdge.add({
+          label: "Acquaintances",
+          arrow: 0
+        });
+        self.add(directLinkToData);
+      },
+      init: function() {
+        self.inited = true;
+        $("#relationshipAdd").on("click", function() {
+          self.addBlankNode();
+        });
+        $("#relationshipBack").on("click", function() {
+          thisGraph.removeSelectFromEdge();
+          thisGraph.overlay.hide(); //backup incase edge not clicked cleanly
+        });
+      },
+      find: function(r) {
+        for (var i in self.relationships) {
+          if (r==self.relationships[i]) return i;
+        }
+        return false;
+      },
+      delete: function( r ) {
+        var index = self.find(r);
+        if (index) self.relationships.splice(index, 1);
+        r.destroy();
+        self.currentEdge.remove( r.data );
+      },
+      relationship: function(r) {
+        var me = this;
+        me.data = r;
+        me.build = function() {
+          me.node = $("#hidden #RelationshipNode").clone(true);
+          me.node.find(".relationshipName").val( r.label ).on("blur", function() {
+            r.label = $(this).val();
+          });
+          me.node.find(".relationshipDirection").val( r.arrow ).on("blur", function() {
+            r.arrow = $(this).val();
+          });
+          me.node.find(".myButton").on("click", function() {
+            self.delete(me);
+          });
+          return me.node;
+        }
+        me.destroy = function() {
+          me.node.remove();
         }
       }
     }
@@ -2221,7 +2425,6 @@ document.onload = (function(d3, undefined){
                       x: self._shaper.avg_x,
                       y: self._shaper.avg_y
                     }
-                    db(c.currentId(i), c.history[c.currentId(i)]);
                     thisGraph.save();
                   }
                 }
@@ -2230,6 +2433,7 @@ document.onload = (function(d3, undefined){
           },
           load: function() {
             var c = self._shaper.config;
+            db(self._shaper);
             var history = c.history[c.currentId()];
             var sliders = self._shaper.sliders.getAll( self._shaper.options.val() );
             if (history) {

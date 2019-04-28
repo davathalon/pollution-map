@@ -14,7 +14,7 @@ if (!$isPreview) {
 <html>
   <head>
     <title>Desmog | <?=$title?></title>
-
+    <meta charset="UTF-8">
     <?if (!$isPreview) {
       $base_url = "https://" . $_SERVER[HTTP_HOST] . substr($_SERVER[REQUEST_URI], 0, strrpos($_SERVER[REQUEST_URI], "/"));?>
       <meta property="og:title" content="<?=$title?>" />
@@ -569,8 +569,48 @@ if (!$isPreview) {
         margin-top:8px;
         font-size:14px;
       }
+      #PathFeedback .round {
+        background:#3c3c3c;
+        color:white;
+        padding:5px;
+        width:100px;
+        font-weight:bold;
+        display:table-cell;
+        vertical-align:middle
+      }
+      #PathFeedback .roles > div {
+        padding:10px 20px;
+        position:relative;
+      }
+      #PathFeedback .roles > div:nth-child(even) {
+        background:#f2f2f2;
+      }
+      #PathFeedback .roles .right, #PathFeedback .roles .left {
+        position:absolute;
+        top:11px;
+        width:20px;
+      }
+      #PathFeedback .roles .left {
+        left:-7px;
+      }
+      #PathFeedback .roles .right {
+        right:-7px;
+      }
+      .swal2-popup.nopadding {
+        padding:0 !important;
+        pointer-events:none;
+      }
     </style>
-    <div style="display:none">
+    <div id="hidden" style="display:none">
+      <div id="PathFeedback">
+        <div style="display:table;width:100%;">
+          <div class="round"></div>
+          <div class="roles" style="display:table-cell">
+
+          </div>
+          <div class="round"></div>
+        </div>
+      </div>
       <div id="embedPopupContent" style="padding:10px 20px 0">
         <textarea readonly style="border:1px solid #ccc;width:100%;height:auto;font-size:15px;padding:10px"></textarea>
       </div>

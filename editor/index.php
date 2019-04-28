@@ -246,7 +246,7 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
     </script>
   </head>
 
-  <body>
+  <body class="main">
 
     <div style="height:100%">
 
@@ -254,7 +254,7 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
         #overlay > div {
           position:fixed;
           width:300px;height:100%;
-          background:rgba(256,256,256,0.97);
+          background:#f4f4f4;
           z-index:1;
           box-shadow:2px 0px 5px #999;
           padding:20px;
@@ -269,6 +269,8 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
         }
         #login input[type=text], #login input[type=password] {
           font-size:17px;
+          border: 1px solid #d5d5d5;
+          padding:4px;
         }
         #svgHolder, #previewer {
           margin-left:300px;
@@ -364,7 +366,7 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
           border-radius: 3px;
           cursor:pointer;
         }
-        body.main #mapActionButtons, body.main #svgHolder {
+        body.main #svgHolder, body.login #svgHolder {
           display:none;
         }
         body.screenshotting #mapActionButtons, body.screenshotting #dclick_prompt {
@@ -427,7 +429,7 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
       </div>
       <div id="overlay" style="display:none;position:absolute;top:0;left:0;height:100%;z-index:10">
 
-        <div id="main" style="background:#f4f4f4">
+        <div id="main">
           <div class="logo" style="margin-bottom:12px">DESMOG</div>
           <div class="subtitle" style="margin-bottom:5px;">Open a Map:</div>
           <div id="projectList">
@@ -447,7 +449,7 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
           </div>
         </div>
 
-        <div id="login" style="background:#f4f4f4">
+        <div id="login">
           <form action="./" method="post">
             <div class="logo" style="margin-bottom:20px">DESMOG</div>
             <div>
@@ -464,7 +466,7 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
           </form>
         </div>
 
-        <div id="project" style="background:rgba(244,244,244,0.97)">
+        <div id="project">
           <div class="logo" style="margin-bottom:12px">DESMOG</div>
           <div id="project_pre_save">
             <div class="buttons" style="margin-top:20px;">
@@ -526,13 +528,26 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
             <div class="buttons" style="margin-top:30px;">
               <input id="graphSave" class="myButton" type="button" value="Preview">
               <input id="graphPreview" class="myButton" type="button" value="Preview" style="display:none">
-              <input id="graphClose" class="myButton grayscale" type="button" value="Cancel">
+              <input id="graphClose" class="myButton grayscale" type="button" value="Home">
               <input id="graphAdvanced" class="myButton grayscale" type="button" value="&#9660;" style="padding: 6px 8px;">
             </div>
           </div>
         </div>
 
-        <div id="info" style="background:rgba(244,244,244,0.97)">
+        <div id="edgeInfo">
+          <div style="font-size: 23px;font-weight:bold;text-align:center;">
+            <span id="relationshipFromName"></span>
+            <div style="margin: 3px 0;color:#666;font-size: 15px;">AND</div>
+            <span id="relationshipToName"></span>
+          </div>
+          <div id="relationshipList"></div>
+          <div style="margin-top:35px">
+            <input id="relationshipBack" class="myButton grayscale" type="button" value="Back">
+            <input id="relationshipAdd" class="myButton" type="button" value="Add" style="margin-left:8px">
+          </div>
+        </div>
+
+        <div id="info">
           <div id="selection_title" style="font-size:18px;font-weight:bold">
 
           </div>
@@ -619,6 +634,42 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
         });
       <?}?>
     </script>
+
+    <style>
+      #relationshipList {
+        text-align:left;
+        padding-top:30px;
+      }
+      #RelationshipNode {
+        margin-bottom:20px;
+      }
+      #RelationshipNode select {
+        font-size:21px;
+        width:90px;
+      }
+      #RelationshipNode div {
+        margin-top:3px;
+      }
+      #RelationshipNode .myButton {
+        padding: 6px 10px
+      }
+      #RelationshipNode select, #RelationshipNode input {
+        vertical-align:middle;
+      }
+    </style>
+    <div id="hidden" style="display:none">
+      <div id="RelationshipNode">
+        <input class="relationshipName" type="text" value="">
+        <div>
+          <select class="relationshipDirection">
+            <option value="0"> &#10231; </option>
+            <option value="1"> &#10230; </option>
+            <option value="2"> &#10229; </option>
+          </select>
+          <input type="button" class="myButton grayscale" value="X">
+        </div>
+      </div>
+    </div>
 
   </body>
 
