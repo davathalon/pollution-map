@@ -16,11 +16,12 @@ if (!$isPreview) {
     <title>Desmog | <?=$title?></title>
     <meta charset="UTF-8">
     <?if (!$isPreview) {
-      $base_url = "https://" . $_SERVER[HTTP_HOST] . substr($_SERVER[REQUEST_URI], 0, strrpos($_SERVER[REQUEST_URI], "/"));?>
+      $base_url = "https://" . $_SERVER[HTTP_HOST] . substr($_SERVER[REQUEST_URI], 0, strrpos($_SERVER[REQUEST_URI], "/"));
+      $img = (file_exists("share/{$id}.jpg")) ?  "share/{$id}.jpg?v={$det['version']}" : "editor/images/standardsocial.jpg" ; ?>
       <meta property="og:title" content="<?=$title?>" />
       <meta property="og:description" content="DeSmog UK was launched in September 2014 as an investigative media outlet dedicated to cutting through the spin clouding the debate on energy and environment in Britain. Since then, our team of journalists and researchers has become a go-to source for accurate, fact-based information regarding misinformation campaigns on climate science in the UK." />
       <meta property="og:type" content="website" />
-      <meta property="og:image" content="<?=$base_url?>/share/<?=$id?>.jpg?v=<?=$det["version"]?>" />
+      <meta property="og:image" content="<?=$base_url."/".$img?>" />
     <?}?>
 
     <link rel="stylesheet" href="editor/static/graph-creator.css" />
@@ -187,8 +188,11 @@ if (!$isPreview) {
         font-size:16px;
         font-weight:bold;
       }
-      svg .conceptG.img text {
-        text-shadow: 0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 4px white;
+      svg .conceptG.img text.blurred {
+        stroke-width:5px;
+        stroke:white;
+        filter:url(#blur);
+        text-shadow:0 0 6px white;
       }
       svg .conceptG.img text {
         visibility:hidden;
@@ -323,6 +327,11 @@ if (!$isPreview) {
             visibility:hidden;
           }
         }
+        @media (max-height: 165px) {
+          #zoomInButton, #zoomOutButton, #shareButton {
+            display:none;
+          }
+        }
         #mapActionButtons {
           position:absolute;top:10px;right:10px;
           z-index:100
@@ -370,14 +379,11 @@ if (!$isPreview) {
         }
         .infopopup span {
           display:block;
-          /*max-height: 120px;*/
           overflow-y: auto;
-          border: 1px solid #ddd;
-          border-radius: 3px;
           font-size: 13px;
           text-align: left;
           white-space: pre-wrap;
-          padding: 5px;
+          padding: 15px 5px 5px;
         }
       </style>
 
@@ -535,10 +541,15 @@ if (!$isPreview) {
     <script src="https://unpkg.com/tippy.js@4"></script>
     <script>
       $(function() {
-        <?if (!$isPreview) {
-          echo "graph.load({$det['id']}, {$det['version']}, ".json_encode($det['config']).")";
+        <?
+        if ($det["deleted"]) {
+          echo "graph.myalert('Deleted', 'This map has been removed. Oh well.', 'warning', function(){ location.href='https://desmog.co.uk' })";
         } else {
-          echo "graph.preview()";
+          if (!$isPreview) {
+            echo "graph.load({$det['id']}, {$det['version']}, ".json_encode($det['config']).")";
+          } else {
+            echo "graph.preview()";
+          }
         }?>
       });
       tippy('[data-tippy-content]', {
@@ -570,10 +581,10 @@ if (!$isPreview) {
         font-size:14px;
       }
       #PathFeedback .round {
-        background:#3c3c3c;
+        background:#0164b3;
         color:white;
-        padding:5px;
-        width:100px;
+        padding:10px 5px;
+        width:120px;
         font-weight:bold;
         display:table-cell;
         vertical-align:middle
@@ -587,7 +598,8 @@ if (!$isPreview) {
       }
       #PathFeedback .roles .right, #PathFeedback .roles .left {
         position:absolute;
-        top:11px;
+        top:50%;
+        margin-top:-10px;
         width:20px;
       }
       #PathFeedback .roles .left {
@@ -612,7 +624,7 @@ if (!$isPreview) {
         </div>
       </div>
       <div id="embedPopupContent" style="padding:10px 20px 0">
-        <textarea readonly style="border:1px solid #ccc;width:100%;height:auto;font-size:15px;padding:10px"></textarea>
+        <textarea readonly style="border:1px solid #ccc;width:100%;height:55px;font-size:16px;padding:10px"></textarea>
       </div>
       <div id="sharePopupContent" style="padding:18px 0 10px">
         <div id="icons">

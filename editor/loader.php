@@ -23,9 +23,10 @@ switch($_POST["action"]) {
         $out = array("success"=>1, "id"=>$id, "version"=>$det["version"]);
       }
     }
-    if ($id && $out) {
+    if ($id && $out && $_POST["screenshot"]) {
       $img = base64_decode( str_replace("data:image/jpeg;base64,", "", $_POST["screenshot"]) );
       file_put_contents("../share/{$id}.jpg", $img);
+      $out["scrape_return"] = fb_rescrape($_POST["directUrl"]);
       die(json_encode($out));
     }
   break;
@@ -44,5 +45,26 @@ switch($_POST["action"]) {
 }
 
 die(json_encode(array("success"=>0)));
+
+
+/** Functions **/
+function fb_rescrape($url)
+{
+	$graph = 'https://graph.facebook.com/';
+	$post = 'id='.urlencode($url).'&scrape=true&access_token=53894946388|QACGAFXLOvAKghgQv3VlSKvSaD8'; //Get an App Access Token from here: https://developers.facebook.com/tools/explorer
+	return send_post($graph, $post);
+}
+function send_post($url, $post)
+{
+	$r = curl_init();
+	curl_setopt($r, CURLOPT_URL, $url);
+	curl_setopt($r, CURLOPT_POST, 1);
+	curl_setopt($r, CURLOPT_POSTFIELDS, $post);
+	curl_setopt($r, CURLOPT_RETURNTRANSFER, 1);
+	curl_setopt($r, CURLOPT_CONNECTTIMEOUT, 5);
+	$data = curl_exec($r);
+	curl_close($r);
+	return $data;
+}
 
 ?>

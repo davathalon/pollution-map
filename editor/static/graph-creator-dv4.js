@@ -13,7 +13,7 @@ document.onload = (function(d3, undefined){
     thisGraph.inited = true;
 
     thisGraph.userView = (id || preview);
-    thisGraph.storeId = "saved_graph3"; //token for localstorage
+    thisGraph.storeId = "saved_graph4"; //token for localstorage
     thisGraph.edge_master = thisGraph.EdgeMaster();
 
     if (thisGraph.userView) {
@@ -53,6 +53,9 @@ document.onload = (function(d3, undefined){
       .attr('orient', 'auto')
       .append('svg:path')
       .attr('d', 'M0,-5L10,0L0,5');
+
+    defs.append("filter").attr("id", "blur")
+        .append("feGaussianBlur").attr("in", "SourceGraphic").attr("stdDeviation", "1,1");
 
     defs.append('svg:marker')
       .attr('id', 'end-arrow-selected')
@@ -344,6 +347,11 @@ document.onload = (function(d3, undefined){
     return window.location.origin=="http://www.desmog.local" || window.location.origin=="http://desmog.local";
   }
 
+  GraphCreator.prototype.facebookLink = function(){
+    var url = this.get_project_url(true) ;
+    var share_url = encodeURIComponent(url);
+    return "https://www.facebook.com/sharer/sharer.php?u="+share_url;
+  }
 
   GraphCreator.prototype.sharePopup = function(){
     var popup;
@@ -662,7 +670,7 @@ document.onload = (function(d3, undefined){
       }
     }
     text += "</div>";
-    myalert("<div style='color:#0164b3'>"+d.title+"</div>", text);
+    this.myalert("<div style='color:#0164b3'>"+d.title+"</div>", text);
   }
 
   // mouseup on nodes
@@ -833,15 +841,19 @@ document.onload = (function(d3, undefined){
         nwords = words.length;
         db(gEl);
         gEl.selectAll("text").remove();
-    var el = gEl.append("text")
-          .attr("text-anchor","middle")
-          .attr("dy", "-" + (nwords-1)*2.5);
 
-    for (var i = 0; i < words.length; i++) {
-      var tspan = el.append('tspan').text(words[i]);
-      if (i > 0)
-        tspan.attr('x', 0).attr('dy', '15');
+    for (var x =0; x<2; x++) { //Twice over, first is the blur
+      var el = gEl.append("text")
+            .attr("text-anchor","middle")
+            .attr("dy", "-" + (nwords-1)*2.5);
+      if (x==0) el.classed("blurred", true);
+      for (var i = 0; i < words.length; i++) {
+        var tspan = el.append('tspan').text(words[i]);
+        if (i > 0)
+          tspan.attr('x', 0).attr('dy', '15');
+      }
     }
+
   };
 
    /**** Function for the circle drag ****/
@@ -1062,7 +1074,7 @@ document.onload = (function(d3, undefined){
     var thisGraph = this;
     thisGraph.bodyloader(true);
     var fail = function() {
-      myalert("Whoops", "There was an error, please try again later");
+      thisGraph.myalert("Whoops", "There was an error, please try again later");
     }
     $.ajax({
        url: "loader.php",
@@ -1072,7 +1084,8 @@ document.onload = (function(d3, undefined){
          action: "save",
          title: thisGraph.project.meta().projectTitle,
          config: localStorage.getItem(thisGraph.storeId),
-         screenshot: screenshot,
+         screenshot: screenshot ? screenshot : "",
+         directUrl: thisGraph.get_project_url(),
          id: thisGraph.mapId || "" //if blank, is new
        },
        error: fail,
@@ -1082,7 +1095,7 @@ document.onload = (function(d3, undefined){
              thisGraph.mapId = response.id;
              thisGraph.version = response.version;
            }
-           myalert("Map Saved", "Well done! The Map URL has been copied.", "success");
+           thisGraph.myalert("Map Saved", "Well done! The Map URL has been copied.", "success");
            thisGraph.copyToClipboard( thisGraph.get_project_url() );
            thisGraph.project.preview.stop();
            thisGraph.project.build_link();
@@ -1109,7 +1122,8 @@ document.onload = (function(d3, undefined){
       "edges": this.edge_master.saveFormat(),
       viewport: this.state.transform,
       shapes: this.info._shaper.config.history,
-      meta: this.project.meta()
+      meta: this.project.meta(),
+      invertLogo: !!this.inverted
     });
     localStorage.setItem(this.storeId, out );
   }
@@ -1155,6 +1169,8 @@ document.onload = (function(d3, undefined){
 
     thisGraph.overlay.show(thisGraph.overlay.panel.PROJECT);
     thisGraph.project.meta( jsonObj.meta );
+
+    if (jsonObj.invertLogo) thisGraph.invertLogo();
 
     if (thisGraph.nodes.length==0) $("#dclick_prompt").show();
 
@@ -1203,6 +1219,7 @@ document.onload = (function(d3, undefined){
        })
        .catch(function (err) {
          db(err);
+         callback(false);
        });
     }
     var done = function() {
@@ -1327,6 +1344,7 @@ document.onload = (function(d3, undefined){
     var thisGraph = this;
     var self = {
       newNode: function() {
+        if (self._staging.awaitingData) return;
         self._staging.build();
         thisGraph.overlay.show(thisGraph.overlay.panel.ADDER, true);
       },
@@ -1739,13 +1757,14 @@ document.onload = (function(d3, undefined){
           setCookie("logout", 1, 9999999999);
           location.href = location.href; //seems like a hack, but location.reload sends POST vars again, which I don't want!
         });
+        self.inited = true;
       },
       chosen: function() {
         var mapId = $(this).data("value");
         if (!mapId) return;
         thisGraph.bodyloader(true, true);
         var fail = function() {
-          myalert("Whoops", "There was an error, please try again later");
+          thisGraph.myalert("Whoops", "There was an error, please try again later");
         }
         $.ajax({
            url: "loader.php",
@@ -1786,6 +1805,20 @@ document.onload = (function(d3, undefined){
     }
     return self;
   }
+
+  GraphCreator.prototype.invertLogo = function() {
+    var thisGraph = this;
+    thisGraph.inverted = !thisGraph.inverted;
+    $("#svgHolder .logo").css("filter", thisGraph.inverted ? "invert(100%)" : "none");
+    if (!thisGraph.userView) {
+      $("#svgHolder .logo").stop(true, true).show();
+      if (thisGraph.invertLogoTimeout) clearTimeout(thisGraph.invertLogoTimeout);
+      thisGraph.invertLogoTimeout = setTimeout(function() {
+        $("#svgHolder .logo").fadeOut();
+      }, 2000);
+    }
+  }
+
 
   GraphCreator.prototype.ProjectPanel = function() {
     var thisGraph = this;
@@ -1863,7 +1896,8 @@ document.onload = (function(d3, undefined){
         default: {width:840, height:600},
         start: function( preSave ) {
           preSave = preSave===true;
-          $("#piframe").html( $("<div>").append($("<iframe>").attr("src","../preview")) );
+          self.ready = false;
+          $("#piframe").html( $("<div>").append( $("<iframe>").attr("src","../preview").on("load", self.preview.iframeReady)) );
           $("#piframe > div").resizable({
             start: function() {
               $("#previewer").addClass("dragging");
@@ -1879,6 +1913,9 @@ document.onload = (function(d3, undefined){
           $("body").toggleClass("previewHolder", true);
           $("body").toggleClass("preSave", preSave);
         },
+        iframeReady: function() {
+          self.ready = true;
+        },
         saveStart: function() {
           thisGraph.save();
           self.preview.start(true);
@@ -1891,20 +1928,26 @@ document.onload = (function(d3, undefined){
           thisGraph.recenter();
         },
         finalSave: function() {
+          if (!self.ready) return;
           if (!$.trim(thisGraph.project.meta().projectTitle)) {
             self.preview.stop();
-            return myalert("Project Title Needed", "You must give your project a title before you can publish it.", "warning", function() {
+            return thisGraph.myalert("Project Title Needed", "You must give your project a title before you can publish it.", "warning", function() {
               $("#projectTitle").focus();
             });
           }
           //Make screenshot first
-          thisGraph.coverblock(true);
-          thisGraph.bodyloader(true);
+          thisGraph.bodyloader(true, true);
           thisGraph.previewFrame().createScreenshot("#svgHolder", function( dataUrl ) {
+            var message = "It's all ready to go live, including this image, which will be shown when this map's link is shared via social media. Are you ready to publish this map?";
+            var img = dataUrl;
+            if (dataUrl===false) { //browser security settings stops image being made
+              img = "images/standardsocial.jpg";
+              message = "This browser's security settings prevents an image of this map being created automatically (for social media sharing). This functionality will be available in most other browsers. If you choose to continue here, the following Desmog logo will be used instead. Do you wish to continue?";
+            }
             thisGraph.bodyloader(false);
             Swal.fire({
               title: 'Are you sure?',
-              html: "<div id='screenshotPopup'>Everything is ready, including this image, which will be shown when this map's link is shared via social media. Are you ready to publish this map? <img src='"+dataUrl+"'></div>",
+              html: "<div id='screenshotPopup'>"+message+" <img src='"+img+"'></div>",
               showCancelButton: true,
               focusCancel: true,
               confirmButtonText: 'Publish'
@@ -1929,9 +1972,16 @@ document.onload = (function(d3, undefined){
           $("#pdimensions").on("click", self.preview.reset);
           $("#finalSave").on("click", self.preview.finalSave)
           $("#finalSaveCancel").on("click", self.preview.stop)
-          $("#graphClose").on("click", thisGraph.home);
+          $("#graphClose").on("click", function(){
+            thisGraph.home();
+          });
           $("#graphAdvanced").on("click", self.advancedOptions);
-          $("#graphDelete").on("click", self.deleteProject);
+          $("#invertLogo").on("click", function() {
+            thisGraph.invertLogo();
+          });
+          $("#graphDelete").on("click", function() {
+            self.deleteProject();
+          });
         }
       },
       deleteProject: function() {
@@ -1948,7 +1998,7 @@ document.onload = (function(d3, undefined){
           if (result.value) {
             thisGraph.bodyloader(true, true);
             var fail = function() {
-              myalert("Whoops", "There was an error, please try again later");
+              thisGraph.myalert("Whoops", "There was an error, please try again later");
             }
             $.ajax({
                url: "loader.php",
@@ -1986,7 +2036,7 @@ document.onload = (function(d3, undefined){
             getImageDimensions(url, function(d, success) {
               if (success===false) {
                 if (!thisGraph.userView && navigator.onLine) {
-                  //myalert('Invalid Image', "Please try again with a different URL", 'warning'); //removed as it's blocking more important popups
+                  //thisGraph.myalert('Invalid Image', "Please try again with a different URL", 'warning'); //removed as it's blocking more important popups
                 }
                 $("#svgBackground").css("background-image", "none");
                 self.background.hide_image();
@@ -2747,6 +2797,17 @@ document.onload = (function(d3, undefined){
     document.body.removeChild(el);
   }
 
+
+  GraphCreator.prototype.myalert = function(title, text, icon, callback) {
+    Swal.fire({
+      title: title,
+      html: text,
+      type: icon
+    }).then((result) => {
+      if (callback) callback();
+    });
+  }
+
   function getImageDimensions(url, foo) {
     var img = new Image();
     img.onload = function() {
@@ -2762,16 +2823,6 @@ document.onload = (function(d3, undefined){
       }, false)
     }
     img.src = url;
-  }
-
-  function myalert(title, text, icon, callback) {
-    Swal.fire({
-      title: title,
-      html: text,
-      type: icon
-    }).then((result) => {
-      if (callback) callback();
-    });
   }
 
   var CPS = [];

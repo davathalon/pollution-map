@@ -44,7 +44,7 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
         padding:6px 16px;
       }*/
       #projectLink a {
-        font-size:11px
+        font-size:13px
       }
       #projectLinkCopy {
         width: 11px;vertical-align: middle;cursor: pointer;
@@ -80,7 +80,7 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
         background: white;
         max-height:300px;
         max-height: calc(100% - 140px);
-        min-height:115px;
+        /*min-height:115px;*/
       }
       #projectList > div {
         border-bottom: 1px solid #ccc;
@@ -160,7 +160,7 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
         font-weight:bold;
         color:#cecece;
         pointer-events:none;
-        text-shadow:0 0 3px white, 0 0 3px white, 0 0 3px white, 0 0 3px white, 0 0 3px white, 0 0 3px white;
+        /*text-shadow:0 0 3px white, 0 0 3px white, 0 0 3px white, 0 0 3px white, 0 0 3px white, 0 0 3px white;*/
         z-index:5;
       }
       .subtitle {
@@ -213,8 +213,11 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
         font-size:16px;
         font-weight:bold;
       }
-      svg .conceptG.img text {
-        text-shadow: 0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 6px white,0px 0px 4px white;
+      svg .conceptG.img text.blurred {
+        stroke-width:5px;
+        stroke:white;
+        filter:url(#blur);
+        text-shadow:0 0 6px white;
       }
       svg .conceptG.img text {
         visibility:hidden;
@@ -408,6 +411,9 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
           white-space: pre-wrap;
           padding: 5px;
         }
+        #advancedOptions .list > var {
+          margin-right:10px;
+        }
       </style>
 
       <div id="svgHolder">
@@ -466,13 +472,27 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
           </form>
         </div>
 
+        <style>
+          #project ul {
+            margin:0;
+            padding:15px 0 8px 20px;
+          }
+          #project li {
+            padding-bottom:20px;
+            font-size:16px;
+          }
+        </style>
         <div id="project">
           <div class="logo" style="margin-bottom:12px">DESMOG</div>
           <div id="project_pre_save">
             <div class="buttons" style="margin-top:20px;">
-              <div style="margin-bottom: 20px;font-size: 17px;">
+              <div style="font-size: 17px;">
                 <div style="font-weight:bold;">Preview Mode</div>
-                <div style="font-style:italic">You can change the social-media image size by altering the preview pane to the right (the default is recommended).</div>
+                <ul>
+                  <li>This shows the exact view and interactivity the user will get.</li>
+                  <li>Drag the sides of the pane to preview different-sized maps.</li>
+                  <li>The image used for social-media will be however you leave the view to the right (small=blurry).</li>
+                </ul>
               </div>
               <input id="finalSave" class="myButton" type="button" value="Publish this Map">
               <input id="finalSaveCancel" class="myButton grayscale" type="button" value="Cancel">
@@ -521,8 +541,9 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
               <div class="subtitle" style="margin-bottom:7px">
                 Advanced Options:
               </div>
-              <div style="font-size:11px">
+              <div class="list" style="font-size:13px">
                 <var id="graphDelete">Delete Map</var>
+                <var id="invertLogo">Invert Logo</var>
               </div>
             </div>
             <div class="buttons" style="margin-top:30px;">
@@ -559,6 +580,12 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
                 Select a Colour:
               </div>
               <input id="colouriserEdit" type="color" value="#f6fbff" style="width:100%;height:50px">
+            </div>
+            <div id="imageEditHolder" style="margin-top:25px">
+              <div class="subtitle" style="margin-bottom:9px">
+                Edit Image (URL):
+              </div>
+              <input id="imageEdit" type="text">
             </div>
           </div>
           <div id="blurb">
@@ -655,6 +682,12 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
       }
       #RelationshipNode select, #RelationshipNode input {
         vertical-align:middle;
+      }
+      .away {
+        width:10px;
+        height:10px;
+        position:absolute;
+        left:-10000px;
       }
     </style>
     <div id="hidden" style="display:none">
