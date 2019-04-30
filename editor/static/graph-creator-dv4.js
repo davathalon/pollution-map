@@ -514,54 +514,29 @@ document.onload = (function(d3, undefined){
       .attr("r", String(consts.nodeRadius))
       .attr("fill", "black");
 
-    //Add images to the new Image nodes
-    newGs.filter(function(d) {
-      return !!d.image;
-    }).classed("img", true)
-      .append("svg:image")
+    newGs.append("svg:image")
       .attr("xlink:href",  function(d) {
         return d.image;
-      })
-      .attr("clip-path","url(#circle-clip)")
-      .attr("x", function(d) {
-        var i = d.dimensions, r = thisGraph.consts.nodeRadius;
-        if (i.width > i.height) {
-          return - (i.width * r)/i.height;
-        } else {
-          return -r;
-        }
-      })
-      .attr("y", function(d) {
-        var i = d.dimensions, r = thisGraph.consts.nodeRadius;
-        if (i.width < i.height) {
-          return - (i.height * r)/i.width;
-        } else {
-          return -r;
-        }
-      })
-      .attr("height", function(d) {
-        var i = d.dimensions, r = thisGraph.consts.nodeRadius;
-        if (i.width < i.height) {
-          return (i.height * r * 2)/i.width;
-        } else {
-          return 2*r;
-        }
-      })
-      .attr("width", function(d) {
-        var i = d.dimensions, r = thisGraph.consts.nodeRadius;
-        if (i.width > i.height) {
-          return (i.width * r * 2)/i.height;
-        } else {
-          return 2*r;
-        }
+      }).attr("clip-path","url(#circle-clip)")
+      .on("error", function() {
+        $(this).attr("href", (thisGraph.userView ? "editor/" : "") + ("images/black.gif"));
       });
+
+    //Add images to the new Image nodes
+    var images = newGs.filter(function(d) {
+      var is_image = typeof d.image_mode === "undefined" ? !!d.image : d.image_mode;
+      d.image_mode = is_image;
+      return is_image;
+    }).classed("img", true);
+
+    thisGraph.positionNodeImages(images.select("image"));
 
     newGs.append("circle").classed("over", true).attr("fill", function(d) {
       return d.bg_color ? d.bg_color : (d.image ? "transparent" : "#f6fbff");
     }).attr("r", String(consts.nodeRadius));
 
     newGs.filter(function(d) {
-      return !!d.bg_color;
+      return !d.image_mode; //!!d.bg_color;
     }).classed("clr", true);
 
     newGs.each(function(d){
@@ -603,6 +578,42 @@ document.onload = (function(d3, undefined){
       //showCloseButton: true,
       showConfirmButton: false,
       customClass: "nopadding"
+    });
+  }
+
+  GraphCreator.prototype.positionNodeImages = function(images) {
+    var thisGraph = this;
+    images.attr("x", function(d) {
+      var i = d.dimensions, r = thisGraph.consts.nodeRadius;
+      if (i.width > i.height) {
+        return - (i.width * r)/i.height;
+      } else {
+        return -r;
+      }
+    })
+    .attr("y", function(d) {
+      var i = d.dimensions, r = thisGraph.consts.nodeRadius;
+      if (i.width < i.height) {
+        return - (i.height * r)/i.width;
+      } else {
+        return -r;
+      }
+    })
+    .attr("height", function(d) {
+      var i = d.dimensions, r = thisGraph.consts.nodeRadius;
+      if (i.width < i.height) {
+        return (i.height * r * 2)/i.width;
+      } else {
+        return 2*r;
+      }
+    })
+    .attr("width", function(d) {
+      var i = d.dimensions, r = thisGraph.consts.nodeRadius;
+      if (i.width > i.height) {
+        return (i.width * r * 2)/i.height;
+      } else {
+        return 2*r;
+      }
     });
   }
 
@@ -839,13 +850,12 @@ document.onload = (function(d3, undefined){
   GraphCreator.prototype.insertTitleLinebreaks = function (gEl, title) {
     var words = title.split(/\s+/g),
         nwords = words.length;
-        db(gEl);
         gEl.selectAll("text").remove();
 
     for (var x =0; x<2; x++) { //Twice over, first is the blur
       var el = gEl.append("text")
             .attr("text-anchor","middle")
-            .attr("dy", "-" + (nwords-1)*2.5);
+            .attr("dy", ((nwords-1)*-7)+5 );
       if (x==0) el.classed("blurred", true);
       for (var i = 0; i < words.length; i++) {
         var tspan = el.append('tspan').text(words[i]);
@@ -1202,7 +1212,7 @@ document.onload = (function(d3, undefined){
         ctx.drawImage(img, 0, 0);
         cb(null, canvas.toDataURL('image/png'))
       }
-      img.ononerror = function () {
+      img.onerror = function () {
         cb(new Error('FailedToLoadImage'))
       }
       if (!canvas.getContext) {
@@ -1242,10 +1252,10 @@ document.onload = (function(d3, undefined){
           fetched++;
           if (!err) {
             d3.select(that).select("image").attr("href", uri)
-            if (fetched==total) {
-              thisGraph.updateGraph();
-              done();
-            }
+          }
+          if (fetched==total) {
+            thisGraph.updateGraph();
+            done();
           }
         })
       });
@@ -1362,8 +1372,27 @@ document.onload = (function(d3, undefined){
       },
       _init: function() {
         $( "#nodeChosenButton" ).on("click", self._nodeChosen);
+        $("#blankNodeAdder").on("click", self._blankNode)
         thisGraph.AutoSuggest(self);
         self._inited = true;
+      },
+      _blankNode: function() {
+        thisGraph.overlay.hide();
+        var node_pos = self._staging.node().data()[0];
+        thisGraph.deleteNode(self._staging.node(), true);
+        var new_id = new Date().getTime()/1000|0;
+        var new_node = {
+          id: new_id,
+          title: "",
+          x: node_pos.x,
+          y: node_pos.y,
+          blurb: {},
+          image_node: false,
+          bg_color: thisGraph.info._colour.picker ? thisGraph.info._colour.picker.val() : "#f6fbff"
+        }
+        thisGraph.nodes.push(new_node);
+        thisGraph.updateGraph();
+        thisGraph.clickNodeById(new_id);
       },
       _nodeChosen: function() {
         thisGraph.overlay.hide();
@@ -1388,6 +1417,7 @@ document.onload = (function(d3, undefined){
             //url: node_det.display.url, //littlesis url
             blurb: self._staging.data.blurb
           }
+          new_node.image_mode = !!node_det.display.image;
           if (node_det.display.image) {
             new_node.image = node_det.display.image;
             new_node.dimensions = self._staging.data.img;
@@ -1827,9 +1857,8 @@ document.onload = (function(d3, undefined){
         $("#projectTitle").on("keyup", function() {
           thisGraph.save();
         });
-        $("#projectBackgroundURL").on("blur", function() {
+        $("#projectBackgroundURL").on("keyup", function() {
           self.background.image_update();
-          thisGraph.save();
         });
         $("#projectBackgroundOpacity").slider({
           value: 0.2,
@@ -1982,6 +2011,9 @@ document.onload = (function(d3, undefined){
           $("#graphDelete").on("click", function() {
             self.deleteProject();
           });
+          $("#guidelines").on("click", function() {
+            thisGraph.myalert("Shortcuts", $("#guidelinesContent").get(0));
+          });
         }
       },
       deleteProject: function() {
@@ -2035,10 +2067,7 @@ document.onload = (function(d3, undefined){
           if (url) {
             getImageDimensions(url, function(d, success) {
               if (success===false) {
-                if (!thisGraph.userView && navigator.onLine) {
-                  //thisGraph.myalert('Invalid Image', "Please try again with a different URL", 'warning'); //removed as it's blocking more important popups
-                }
-                $("#svgBackground").css("background-image", "none");
+                //if (!thisGraph.userView && navigator.onLine) thisGraph.myalert('Invalid Image', "Please try again with a different URL", 'warning'); //removed as it's blocking more important popups
                 self.background.hide_image();
               }
             });
@@ -2183,10 +2212,10 @@ document.onload = (function(d3, undefined){
         me.data = r;
         me.build = function() {
           me.node = $("#hidden #RelationshipNode").clone(true);
-          me.node.find(".relationshipName").val( r.label ).on("blur", function() {
+          me.node.find(".relationshipName").val( r.label ).on("keyup", function() {
             r.label = $(this).val();
           });
-          me.node.find(".relationshipDirection").val( r.arrow ).on("blur", function() {
+          me.node.find(".relationshipDirection").val( r.arrow ).on("keyup", function() {
             r.arrow = $(this).val();
           });
           me.node.find(".myButton").on("click", function() {
@@ -2227,11 +2256,78 @@ document.onload = (function(d3, undefined){
       },
       _build: function() {
         if (!self._inited) self._init();
-        $("#info #selection_title").text( self._groupValue("title") );
+        $("#info .rightOption").toggle( thisGraph.getSelected().size()==1 );
+        self._title.refresh();
         self._blurb.refresh();
+        self._imageUrl.refresh();
         self._scaler.refresh();
         self._colour.refresh();
         self._shaper.refresh();
+      },
+      _title: {
+        init: function() {
+          $("#info #selectionTitle").on("keyup", self._title.save )
+        },
+        refresh: function() {
+          if (self.num==1) {
+            $("#info #selectionTitle").val( self._groupValue("title") );
+            setTimeout(function() {
+              if (self._groupValue("title")=="") $("#info #selectionTitle").focus();
+            });
+          }
+          $("#selectionTitleHolder").toggleClass("multiple", self.num>1);
+        },
+        save: function() {
+          if (self.num==1) {
+            thisGraph.getSelected().each(function(d) {
+              d.title = $("#info #selectionTitle").val();
+              thisGraph.insertTitleLinebreaks(d3.select(this), d.title);
+            });
+          }
+        }
+      },
+      _imageUrl: {
+        default: "images/black.gif",
+        refresh: function() {
+          var show = thisGraph.getSelected().size()==1 && thisGraph.getSelected().data()[0].image_mode;
+          $("#info #imageEditHolder").toggle(show); //multiple selected
+          $("#imageEdit").val(thisGraph.getSelected().data()[0].image);
+        },
+        init: function() {
+          $("#imageEdit").on("keyup", self._imageUrl.save);
+        },
+        hide: function() {
+          thisGraph.getSelected().each(function(d) {
+            d3.select(this).select("image").attr("href", self._imageUrl.default);
+          });
+        },
+        change: function( url, dim ) {
+          thisGraph.getSelected().each(function(d) {
+            d3.select(this).select("image").attr("href", url);
+            d.image = url;
+            d.dimensions = dim;
+          });
+          thisGraph.positionNodeImages(thisGraph.getSelected().select("image"));
+        },
+        save: function() {
+          if (self.num==1) {
+            var new_url = $("#imageEdit").val();
+            if (!new_url) {
+              self._imageUrl.hide();
+            } else {
+              thisGraph.getSelected().each(function(d) { //just one
+                d.image = $("#imageEdit").val();
+                getImageDimensions(new_url, function(d, success) {
+                  if (success===false) {
+                    self._imageUrl.hide();
+                  } else {
+                    self._imageUrl.change(new_url, d);
+                  }
+                });
+              });
+            }
+          }
+        }
       },
       _blurb: {
         refresh: function() {
@@ -2254,7 +2350,6 @@ document.onload = (function(d3, undefined){
                 summary: $("#blurbLong").val()
               }
             });
-            thisGraph.save();
           }
         }
       },
@@ -2266,6 +2361,8 @@ document.onload = (function(d3, undefined){
             return single ? firstData.title : "Multiple Nodes" ;
           case "blurb":
             return single ? firstData.blurb : false ;
+          case "image":
+            return single ? firstData.image : false ;
           case "scale":
             if (single) {
               return firstData.scale || 1;
@@ -2301,11 +2398,37 @@ document.onload = (function(d3, undefined){
         $("#nodeOptionsBackButton").on("click", function() {
           thisGraph.clearSelection();
         });
+        $("#imageRemoveButton").on("click", function() {
+          self._toggleNodeMode();
+        });
+        $("#colourRemoveButton").on("click", function() {
+          self._toggleNodeMode();
+        });
+
         self._scaler.init();
+        self._title.init();
         self._colour.init();
         self._shaper.init();
         self._blurb.init();
+        self._imageUrl.init();
         self._inited = true;
+      },
+      _toggleNodeMode: function() {
+        var node = thisGraph.getSelected().each(function(d) {
+          d.image_mode = !d.image_mode;
+          $("#colourEditHolder").toggle( !d.image_mode );
+          $("#imageEditHolder").toggle( d.image_mode );
+          d3.select(this).classed("clr", !d.image_mode);
+          d3.select(this).classed("img", d.image_mode);
+          if (d.image_mode) {
+            self._colour.set("#000000");
+
+            self._imageUrl.save();
+          } else {
+            if (d.bg_color) self._colour.picker.val(d.bg_color);
+            self._colour.update();
+          }
+        });
       },
       _colour: {
         init: function() {
@@ -2324,17 +2447,25 @@ document.onload = (function(d3, undefined){
         },
         update: function() {
           var c = self._colour.picker.val();
-          self._colour.list().selectAll("circle")
+          self._colour.list().selectAll("circle.over")
           .attr("fill", function(d) {
             d.bg_color = c;
             return d.bg_color;
           });
         },
-        count: function() {
-          return self._colour.list().size();
+        set: function(c) {
+          /*without updating attribute, e.g. if just setting the background for an image node*/
+          self._colour.list(true).selectAll("circle.over").attr("fill", c);
         },
-        list: function() {
-          return d3.select("svg").select(".circles").selectAll(".selected.clr");
+        count: function() {
+          var num = 0;
+          thisGraph.getSelected().each(function(d) {
+            if (!d.image_mode) num++;
+          });
+          return num;
+        },
+        list: function( ignore_class ) {
+          return d3.select("svg").select(".circles").selectAll(".selected"+(ignore_class?"":".clr"));
         }
       },
       _shaper: {
@@ -2797,6 +2928,9 @@ document.onload = (function(d3, undefined){
     document.body.removeChild(el);
   }
 
+  GraphCreator.prototype.help = function(title, text) {
+    this.myalert(title, text, "question");
+  }
 
   GraphCreator.prototype.myalert = function(title, text, icon, callback) {
     Swal.fire({

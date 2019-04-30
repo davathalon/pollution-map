@@ -19,6 +19,7 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
     <title>Desmog | Map Editor</title>
     <link rel="stylesheet" href="static/graph-creator.css" />
     <link rel="stylesheet" href="static/jquery-ui.css">
+    <link rel="stylesheet" href="static/main.css">
     <style>
       html, body {
         font-family:arial,sans-serif;
@@ -217,7 +218,7 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
         stroke-width:5px;
         stroke:white;
         filter:url(#blur);
-        text-shadow:0 0 6px white;
+        /*text-shadow:0 0 6px white;*/
       }
       svg .conceptG.img text {
         visibility:hidden;
@@ -274,6 +275,9 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
           font-size:17px;
           border: 1px solid #d5d5d5;
           padding:4px;
+        }
+        #overlay input[type=text].url, #overlay input[type=password].url {
+          font-size:16px;
         }
         #svgHolder, #previewer {
           margin-left:300px;
@@ -412,7 +416,7 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
           padding: 5px;
         }
         #advancedOptions .list > var {
-          margin-right:10px;
+          margin-right:12px;
         }
       </style>
 
@@ -481,6 +485,18 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
             padding-bottom:20px;
             font-size:16px;
           }
+          .help {
+            width: 13px;
+            opacity: 0.5;
+            cursor:pointer;
+            margin-bottom:-2px;
+          }
+          .help:hover {
+            opacity:1;
+          }
+          .valign span, .valign img, .valign a {
+            vertical-align:middle;
+          }
         </style>
         <div id="project">
           <div class="logo" style="margin-bottom:12px">DESMOG</div>
@@ -509,12 +525,14 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
           <div id="project_non_preview">
             <div class="fields">
               <div>
-                <div class="subtitle" style="margin-bottom:5px;">Map Title:</div>
+                <div class="subtitle valign" style="margin-bottom:5px;">
+                  <span>Map Title:</span> <img class="help" src="images/help.png" onclick="graph.help('Map Title', 'The map title has two uses: 1) To help you distinguish between maps on the main page, and 2) It is displayed when sharing the map via social-media.')">
+                </div>
                 <input id="projectTitle" type="text" autocomplete="off">
               </div>
               <div>
                 <div class="subtitle" style="margin-bottom:5px;">Background Image (URL):</div>
-                <input id="projectBackgroundURL" type="text" autocomplete="off">
+                <input id="projectBackgroundURL" type="text" autocomplete="off" class="url">
               </div>
               <div>
                 <div class="subtitle" style="margin-bottom:7px;">Background Opacity:</div>
@@ -538,12 +556,13 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
               </div>
             </div>
             <div id="advancedOptions" style="display: none; margin-left:2px;margin-top: 20px; font-size: 15px; color: rgb(34, 34, 34);">
-              <div class="subtitle" style="margin-bottom:7px">
+              <div class="subtitle" style="margin-bottom:8px">
                 Advanced Options:
               </div>
               <div class="list" style="font-size:13px">
                 <var id="graphDelete">Delete Map</var>
                 <var id="invertLogo">Invert Logo</var>
+                <var id="guidelines">Shortcuts</var>
               </div>
             </div>
             <div class="buttons" style="margin-top:30px;">
@@ -564,28 +583,31 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
           <div id="relationshipList"></div>
           <div style="margin-top:35px">
             <input id="relationshipBack" class="myButton grayscale" type="button" value="Back">
-            <input id="relationshipAdd" class="myButton" type="button" value="Add" style="margin-left:8px">
+            <input id="relationshipAdd" class="myButton" type="button" value="Add" style="float:right">
           </div>
         </div>
 
         <div id="info">
-          <div id="selection_title" style="font-size:18px;font-weight:bold">
-
+          <div id="selectionTitleHolder" style="font-size:18px;font-weight:bold">
+            <input id="selectionTitle" type="text">
+            <div>Multiple Nodes</div>
           </div>
           <div style="margin-top:20px">
-            <div id="scaleAmount" class="subtitle" style="margin-bottom:9px"></div>
+            <div class="subtitle valign" style="margin-bottom:9px">
+              <span id="scaleAmount"></span> <img class="help" src="images/help.png" style="margin-left:4px" onclick="graph.help('Node Scaling', 'This option is <i>not</i> for deciding the size of node that the user sees, because the zoom feature negates that entirely. Rather, this feature is meant for choosing your node size <i>relative</i> to the other nodes. Ideally, your most common-sized node has a setting around 1. If that appears too large, then simply zoom out.')">
+            </div>
             <div id="scaleSlider"></div>
             <div id="colourEditHolder" style="margin-top:25px">
               <div class="subtitle" style="margin-bottom:9px">
-                Select a Colour:
+                Select a Colour: <var id="colourRemoveButton" class="rightOption">(Image)</var>
               </div>
-              <input id="colouriserEdit" type="color" value="#f6fbff" style="width:100%;height:50px">
+              <input id="colouriserEdit" type="color" style="width:100%;height:50px">
             </div>
             <div id="imageEditHolder" style="margin-top:25px">
               <div class="subtitle" style="margin-bottom:9px">
-                Edit Image (URL):
+                Edit Image URL: <var id="imageRemoveButton" class="rightOption">(Colour)</var>
               </div>
-              <input id="imageEdit" type="text">
+              <input id="imageEdit" type="text" class="url">
             </div>
           </div>
           <div id="blurb">
@@ -634,6 +656,9 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
             <img src="#">
             <input id="nodeChosenButton" class="myButton" type="button" value="Add to Map" style="display:block;margin-top:20px">
           </div>
+          <div id="blankNodeAdder" class="subtitle" style="margin-top:20px">
+            <var>Or add a blank node</var>
+          </div>
         </div>
 
       </div>
@@ -672,13 +697,14 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
       }
       #RelationshipNode select {
         font-size:21px;
-        width:90px;
+        width:220px;
       }
       #RelationshipNode div {
         margin-top:3px;
       }
       #RelationshipNode .myButton {
-        padding: 6px 10px
+        padding: 6px 10px;
+        float:right;
       }
       #RelationshipNode select, #RelationshipNode input {
         vertical-align:middle;
@@ -700,6 +726,32 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
             <option value="2"> &#10229; </option>
           </select>
           <input type="button" class="myButton grayscale" value="X">
+        </div>
+      </div>
+      <div id="guidelinesContent">
+        <b>Adding New Relationships</b>
+        <div>
+          Hold down the Shift key whilst dragging from one node to another.
+        </div>
+        <b>Multiple Node Selection</b>
+        <div>
+          Hold down the Ctrl key and drag a box around the nodes you wish to select. You can add or remove individual nodes from your selection by clicking on them, whilst holding down the Ctrl key. You will then be able to edit, move, and arrange into shapes multiple nodes at once.
+        </div>
+        <b>Selecting All</b>
+        <div>
+          A quick way to select all nodes is by pressing Ctrl and A.
+        </div>
+        <b>Deleting Nodes & Relationships</b>
+        <div>
+          Press the Backspace or Delete key whilst a node or relationship is selected, in order to delete it.
+        </div>
+        <b>Adding new Nodes</b>
+        <div>
+          Double-click any blank bit of background to bring up the New Node options.
+        </div>
+        <b>Zooming</b>
+        <div>
+          You can use your mouse-wheel or trackpack to zoom in and out. You can also double-click to zoom-in.
         </div>
       </div>
     </div>

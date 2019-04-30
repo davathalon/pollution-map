@@ -26,6 +26,7 @@ if (!$isPreview) {
 
     <link rel="stylesheet" href="editor/static/graph-creator.css" />
     <link rel="stylesheet" href="editor/static/jquery-ui.css">
+    <link rel="stylesheet" href="editor/static/main.css">
     <style>
       html, body {
         font-family:arial,sans-serif;

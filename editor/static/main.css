@@ -1,0 +1,37 @@
+g.conceptG.clr image {
+  display:none;
+}
+
+g.conceptG.img .over {
+  fill:transparent !important;
+}
+
+.rightOption {
+  float:right;
+  font-size: 12px;
+  padding-top: 3px;
+  color:#999;
+}
+
+#selectionTitleHolder.multiple div {
+  display:block;
+}
+#selectionTitleHolder.multiple input, #selectionTitleHolder div {
+  display:none;
+}
+
+#selectionTitle {
+  font-weight:bold;
+}
+
+
+#guidelinesContent {
+  text-align:left;
+  font-size:15px;
+}
+
+#guidelinesContent b {
+  display:block;
+  margin-top:20px;
+  margin-bottom:5px;
+}
