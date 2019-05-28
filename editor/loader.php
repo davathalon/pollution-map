@@ -33,13 +33,21 @@ switch($_POST["action"]) {
   case "load":
     $id = mysqli_real_escape_string($mysqli, $_POST["id"]);
     if ($det = mysqli_fetch_assoc(mysqli_query($mysqli, "SELECT * FROM maps WHERE id=$id"))) {
-      die(json_encode(array("success"=>1, "version"=>$det["version"], "config"=>$det["config"], "id"=>$det["id"]))); //mysqli_affected_rows($mysqli): stamp won't update if no changes made
+      die(json_encode(array("success"=>1, "version"=>$det["version"], "config"=>$det["config"], "title"=>$det["title"], "id"=>$det["id"]))); //mysqli_affected_rows($mysqli): stamp won't update if no changes made
     }
   break;
   case "delete":
     $id = mysqli_real_escape_string($mysqli, $_POST["id"]);
     if (mysqli_query($mysqli, "UPDATE maps SET deleted=1 WHERE id=$id")) {
       die(json_encode(array("success"=>1)));
+    }
+  break;
+  case "clone":
+    $id = mysqli_real_escape_string($mysqli, $_POST["id"]);
+    if ($det = mysqli_fetch_assoc(mysqli_query($mysqli, "SELECT title FROM maps WHERE id=$id"))) {
+      if (mysqli_query($mysqli, "INSERT INTO maps (title, config) SELECT 'Clone: ".addslashes($det[title])."', config FROM maps WHERE id=$id")) {
+        die(json_encode(array("success"=>1)));
+      }
     }
   break;
 }

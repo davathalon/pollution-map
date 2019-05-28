@@ -24,9 +24,8 @@ if (!$isPreview) {
       <meta property="og:image" content="<?=$base_url."/".$img?>" />
     <?}?>
 
-    <link rel="stylesheet" href="editor/static/graph-creator.css" />
+    <link rel="stylesheet" href="editor/static/main.css" />
     <link rel="stylesheet" href="editor/static/jquery-ui.css">
-    <link rel="stylesheet" href="editor/static/main.css">
     <style>
       html, body {
         font-family:arial,sans-serif;
@@ -536,7 +535,7 @@ if (!$isPreview) {
     <script src="editor/static/d3.v4.js" charset="utf-8"></script>
     <script src="editor/static/LsDataSource.js"></script>
     <script src="editor/static/jscolor.js"></script>
-    <script src="editor/static/graph-creator-dv4.js?v=2"></script>
+    <script src="editor/static/main.js"></script>
     <script src="editor/static/dom-to-image.js"></script>
     <script src="https://unpkg.com/popper.js@1"></script>
     <script src="https://unpkg.com/tippy.js@4"></script>

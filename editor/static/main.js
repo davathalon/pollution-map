@@ -121,17 +121,20 @@ document.onload = (function(d3, undefined){
              return {x: d.x, y: d.y};
           })
           .on("start", function(d){
-              // console.log('Drag started :', d);
-              //thisGraph.circleMouseUp.call(thisGraph, d3.select(this), d);
+            //console.log('Drag started :', d);
+            //thisGraph.circleMouseUp.call(thisGraph, d3.select(this), d);
           })
           .on("drag", function(d){
-            // console.log('Draged beginn :', args);
+             //console.log('Draged beginn :', args);
             if (thisGraph.userView) return;
             thisGraph.state.justDragged = true;
             thisGraph.dragmove.call(thisGraph, d, d3.select(this));
           })
           .on("end", function(d) {
-            thisGraph.circleMouseUp.call(thisGraph, d3.select(this), d);
+            thisGraph.state.mouseDownLink = null;
+            if (!d.source) {
+              thisGraph.circleMouseUp.call(thisGraph, d3.select(this), d);
+            }
           });
 
 
@@ -186,16 +189,12 @@ document.onload = (function(d3, undefined){
       thisGraph.svg.on("dblclick.zoom", null);
     }
 
-
-
     // listen for resize
     window.onresize = function() {
       thisGraph.updateWindow();
       thisGraph.recenter()
     }
 
-    //thisGraph.load();
-    //thisGraph.recenter()
   }
 
   GraphCreator.prototype.recenter = function() {
@@ -280,11 +279,7 @@ document.onload = (function(d3, undefined){
 
   GraphCreator.prototype.ajaxError = function() {
     if (!navigator.onLine) {
-      Swal.fire({
-        type: 'warning',
-        title: 'You are offline',
-        text: 'Please connect to the internet & try again.'
-      });
+      this.offlineMessage();
     } else {
       Swal.fire({
         type: 'warning',
@@ -393,7 +388,7 @@ document.onload = (function(d3, undefined){
       });
 
     } else {
-      popup = $("<div>").append("Sharing is only for live maps (because social media sites need access to the final URL). Publish this map first, and you can then view sharing on the direct link to the map.");
+      popup = $("<div>").append("Sharing is only for live maps (because social media sites need access to the final URL). Save this map first, and you can then view sharing on the direct link to the map.");
     }
     Swal.fire({
       title: 'Share',
@@ -436,27 +431,23 @@ document.onload = (function(d3, undefined){
         return "Path_"+d.source.id + "_" + d.target.id;
       });
 
-    function getSisterPath(d) {
-      return d3.select("#Path_"+d.source.id + "_" + d.target.id);
-    }
-
     var enter = pathsShadow.enter()
       .append("path")
       .classed("link", true)
       .attr("d", this.edge_svg)
       .on("mouseover", function(d) {
-        getSisterPath(d).classed("hovered", true);
+        thisGraph.getSisterPath(d).classed("hovered", true);
       })
       .on("mouseout", function(d) {
-        getSisterPath(d).classed("hovered", false);
+        thisGraph.getSisterPath(d).classed("hovered", false);
       })
       .on("mousedown", function(d){
-        thisGraph.pathMouseDown.call(thisGraph, getSisterPath(d), d);
+        thisGraph.pathMouseDown.call(thisGraph, thisGraph.getSisterPath(d), d);
       })
       .on("mouseup", function(d){
-        console.log("path mouse up : ",  getSisterPath(d).node());
+        console.log("path mouse up : ",  thisGraph.getSisterPath(d).node());
         state.mouseDownLink = null;
-      });
+      }).call(thisGraph.drag);
 
     // update existing paths
     paths
@@ -551,16 +542,31 @@ document.onload = (function(d3, undefined){
 
   };
 
+  GraphCreator.prototype.getSisterPath = function(d) {
+    return d3.select("#Path_"+d.source.id + "_" + d.target.id);
+  }
+
+  GraphCreator.prototype.updateEdgeCurve = function(d, node, bezier) {
+    d.curve = bezier;
+    node.attr("d", this.edge_svg);
+    this.getSisterPath(d).attr("d", this.edge_svg);
+  }
 
   GraphCreator.prototype.edge_svg = function(d){
-    return "M" + d.source.x + "," + d.source.y + "L" + d.target.x + "," + d.target.y;
+    var lineGenerator = d3.line().curve(d3.curveNatural);
+
+    var points = [];
+    points.push([d.source.x, d.source.y]);
+    if (d.curve) points.push([d.curve[0], d.curve[1]]);
+    points.push([d.target.x, d.target.y]);
+    var pathData = lineGenerator(points);
+    return pathData;//"M" + d.source.x + "," + d.source.y + "L" + d.target.x + "," + d.target.y;
   }
 
 
   /**** Function for the path mouse evnet  ****/
 
   GraphCreator.prototype.pathPopup = function(d) {
-    db(d);
     var html = $("#hidden #PathFeedback").clone(true);
     html.find(".round:first-child").text(d.source.title);
     html.find(".round:last-child").text(d.target.title);
@@ -617,7 +623,7 @@ document.onload = (function(d3, undefined){
     });
   }
 
-  GraphCreator.prototype.pathMouseDown = function(d3path, d){
+  GraphCreator.prototype.pathMouseDown = function(d3path, d, noMouseUp){
     var thisGraph = this,
         state = thisGraph.state;
 
@@ -631,7 +637,7 @@ document.onload = (function(d3, undefined){
 
       if (d3.event.stopPropagation) d3.event.stopPropagation();
 
-      state.mouseDownLink = d;
+      if (!noMouseUp) state.mouseDownLink = d;
 
       thisGraph.clearSelection();
 
@@ -717,7 +723,7 @@ document.onload = (function(d3, undefined){
         arrow: 0
       });
       thisGraph.updateGraph();
-      thisGraph.pathMouseDown( edge.node(), edge.directEdge );
+      thisGraph.pathMouseDown( edge.node(), edge.directEdge, true );
 
     } else {
       // we're in the same node
@@ -800,7 +806,6 @@ document.onload = (function(d3, undefined){
   GraphCreator.prototype.replaceSelectEdge = function(d3Path, edgeData){
     console.log(" replace selected edge ");
     var thisGraph = this;
-    db("||||||", d3Path);
     d3Path.classed(thisGraph.consts.selectedClass, true);
     thisGraph.removeSelectFromEdge(true);
     thisGraph.state.selectedEdge = edgeData;
@@ -874,17 +879,26 @@ document.onload = (function(d3, undefined){
 
   GraphCreator.prototype.dragmove = function(d, d3node) {
     var thisGraph = this;
-    if (thisGraph.state.shiftNodeDrag){
+
+    if (thisGraph.state.mouseDownLink) {
+
+      thisGraph.updateEdgeCurve(d, d3node, d3.mouse(thisGraph.svgG.node()));
+
+    } else if (thisGraph.state.shiftNodeDrag){
+
       thisGraph.dragLine.attr('d', 'M' + d.x + ',' + d.y + 'L' + d3.mouse(thisGraph.svgG.node())[0] + ',' + d3.mouse(this.svgG.node())[1]);
+
     } else {
 
       d.x += d3.event.dx;
       d.y +=  d3.event.dy;
+      thisGraph.removeCurvesFromNode(d);
 
       thisGraph.getSelected().each(function(dd) {
         if (d!=dd && d3node.classed("selected")) {
           dd.x += d3.event.dx;
           dd.y +=  d3.event.dy;
+          thisGraph.removeCurvesFromNode(dd);
         }
       });
 
@@ -897,46 +911,20 @@ document.onload = (function(d3, undefined){
     }
   };
 
+  GraphCreator.prototype.removeCurvesFromNode = function(d) {
+    this.edges.forEach(function(e) {
+      if (e.source === d || e.target === d) {
+        e.curve = null;
+      }
+    });
+  }
 
-  /* place editable text on node in place of svg text */
-  GraphCreator.prototype.changeTextOfNode = function(d3node, d){
-    var thisGraph= this,
-        consts = thisGraph.consts,
-        htmlEl = d3node.node();
-    d3node.selectAll("text").remove();
-    var nodeBCR = htmlEl.getBoundingClientRect(),
-        curScale = nodeBCR.width/consts.nodeRadius,
-        placePad  =  5*curScale,
-        useHW = curScale > 1 ? nodeBCR.width*0.71 : consts.nodeRadius*1.42;
-    // replace with editableconent text
-    var d3txt = thisGraph.svg.selectAll("foreignObject")
-          .data([d])
-          .enter()
-          .append("foreignObject")
-          .attr("x", nodeBCR.left + placePad )
-          .attr("y", nodeBCR.top + placePad)
-          .attr("height", 2*useHW)
-          .attr("width", useHW)
-          .append("xhtml:p")
-          .attr("id", consts.activeEditId)
-          .attr("contentEditable", "true")
-          .text(d.title)
-          .on("mousedown", function(d){
-            d3.event.stopPropagation();
-          })
-          .on("keydown", function(d){
-            d3.event.stopPropagation();
-            if (d3.event.keyCode == consts.ENTER_KEY && !d3.event.shiftKey){
-              this.blur();
-            }
-          })
-          .on("blur", function(d){
-            d.title = this.textContent;
-            thisGraph.insertTitleLinebreaks(d3node, d.title);
-            d3.select(this.parentElement).remove();
-          });
-    return d3txt;
-  };
+  GraphCreator.prototype.removeCurvesFromNodeSet = function(nodes) {
+    var thisGraph = this;
+    nodes.each(function(d) {
+      thisGraph.removeCurvesFromNode(d);
+    });
+  }
 
   /* select all text in element: taken from http://stackoverflow.com/questions/6139107/programatically-select-text-in-a-contenteditable-html-element */
   GraphCreator.prototype.selectElementContents = function(el) {
@@ -1037,7 +1025,6 @@ document.onload = (function(d3, undefined){
     var thisGraph = this, state = thisGraph.state;
     if (state.selectedEdge) {
       thisGraph.edges.splice(thisGraph.edges.indexOf(state.selectedEdge), 1);
-      db(":::::::",state.selectedEdge.info);
       thisGraph.edge_master.kill( state.selectedEdge );
       state.selectedEdge = null;
       thisGraph.overlay.hide();
@@ -1098,7 +1085,13 @@ document.onload = (function(d3, undefined){
          directUrl: thisGraph.get_project_url(),
          id: thisGraph.mapId || "" //if blank, is new
        },
-       error: fail,
+       error: function() {
+         if (!navigator.onLine) {
+           thisGraph.offlineMessage();
+         } else {
+           fail();
+         }
+       },
        success: function(response) {
          if (response.success==1) {
            if (response.id) {
@@ -1143,10 +1136,10 @@ document.onload = (function(d3, undefined){
   }
 
   GraphCreator.prototype.preview = function() {
-    this.load(false, false, false, true);
+    this.load(false, false, false, false, true);
   }
 
-  GraphCreator.prototype.load = function(id, version, config, preview) {
+  GraphCreator.prototype.load = function(id, version, config, title, preview) {
 
     var thisGraph = this;
     thisGraph.init(id, preview);
@@ -1178,6 +1171,8 @@ document.onload = (function(d3, undefined){
     thisGraph.edge_master.addEdges(jsonObj.edges);
 
     thisGraph.overlay.show(thisGraph.overlay.panel.PROJECT);
+
+    jsonObj.meta.projectTitle = title; //don't let meta get out of sync with file name
     thisGraph.project.meta( jsonObj.meta );
 
     if (jsonObj.invertLogo) thisGraph.invertLogo();
@@ -1195,6 +1190,14 @@ document.onload = (function(d3, undefined){
 
   GraphCreator.prototype.setLoggedIn = function(b) {
     this.loggedIn = b;
+  }
+
+  GraphCreator.prototype.offlineMessage = function() {
+    Swal.fire({
+      type: 'warning',
+      title: 'You are offline',
+      text: 'Please connect to the internet & try again.'
+    });
   }
 
   GraphCreator.prototype.createScreenshot = function( node, callback ) { //Called from parent frame
@@ -1567,6 +1570,7 @@ document.onload = (function(d3, undefined){
         me.list = [];
         me.source_id = edge_det.source;
         me.target_id = edge_det.target;
+        me.curve = edge_det.curve;
         me.is = function( source_id, target_id ) {
           return ( (me.source_id==source_id && me.target_id==target_id)
               || (me.source_id==target_id && me.target_id==source_id)
@@ -1606,19 +1610,22 @@ document.onload = (function(d3, undefined){
           me.directEdge = {
             source: me.findNodeDataById( me.source_id ),
             target: me.findNodeDataById( me.target_id ),
+            curve: me.curve,
             info: me
           }
           thisGraph.edges.push( me.directEdge );
         }
         me.saveFormat = function() {
-          var out = [];
+          var out = [], el;
           for (var i in me.list) {
-            out.push({
+            el = {
               source: me.source_id,
               target: me.target_id,
               label: me.list[i].label,
               arrow: me.list[i].arrow
-            });
+            }
+            if (me.directEdge.curve) el.curve = me.directEdge.curve;
+            out.push(el);
           }
           return out;
         }
@@ -1807,7 +1814,7 @@ document.onload = (function(d3, undefined){
            error: fail,
            success: function(response) {
              if (response.success==1) {
-               thisGraph.load(response.id, response.version, response.config);
+               thisGraph.load(response.id, response.version, response.config, response.title);
              } else {
                fail();
              }
@@ -1960,14 +1967,14 @@ document.onload = (function(d3, undefined){
           if (!self.ready) return;
           if (!$.trim(thisGraph.project.meta().projectTitle)) {
             self.preview.stop();
-            return thisGraph.myalert("Project Title Needed", "You must give your project a title before you can publish it.", "warning", function() {
+            return thisGraph.myalert("Project Title Needed", "You must give your project a title before you can save it.", "warning", function() {
               $("#projectTitle").focus();
             });
           }
           //Make screenshot first
           thisGraph.bodyloader(true, true);
           thisGraph.previewFrame().createScreenshot("#svgHolder", function( dataUrl ) {
-            var message = "It's all ready to go live, including this image, which will be shown when this map's link is shared via social media. Are you ready to publish this map?";
+            var message = "It's all ready to go live, including this image, which will be shown when this map's link is shared via social media. Are you ready to save this map?";
             var img = dataUrl;
             if (dataUrl===false) { //browser security settings stops image being made
               img = "images/standardsocial.jpg";
@@ -1979,7 +1986,7 @@ document.onload = (function(d3, undefined){
               html: "<div id='screenshotPopup'>"+message+" <img src='"+img+"'></div>",
               showCancelButton: true,
               focusCancel: true,
-              confirmButtonText: 'Publish'
+              confirmButtonText: 'Save'
             }).then((result) => {
               if (result.value) {
                 thisGraph.serverSave( dataUrl );
@@ -2011,8 +2018,11 @@ document.onload = (function(d3, undefined){
           $("#graphDelete").on("click", function() {
             self.deleteProject();
           });
+          $("#cloneMap").on("click", function() {
+            self.cloneProject();
+          });
           $("#guidelines").on("click", function() {
-            thisGraph.myalert("Shortcuts", $("#guidelinesContent").get(0));
+            thisGraph.myalert("Shortcuts", $("#guidelinesContent").clone(true).get(0));
           });
         }
       },
@@ -2038,6 +2048,44 @@ document.onload = (function(d3, undefined){
                dataType: "json",
                data: {
                  action: "delete",
+                 id: thisGraph.mapId
+               },
+               error: fail,
+               success: function(response) {
+                 if (response.success==1) {
+                   thisGraph.home();
+                 } else {
+                   fail();
+                 }
+               },
+               complete: function() {
+                 thisGraph.bodyloader(false, true);
+               }
+            });
+          }
+        });
+      },
+      cloneProject: function() {
+        if (!thisGraph.mapId) return;
+        Swal.fire({
+          title: 'Clone Project?',
+          html: "This will create a clone of the last saved version of this map. Would you like to continue?",
+          type: "question",
+          showCancelButton: true,
+          focusCancel: true,
+          confirmButtonText: 'Clone'
+        }).then((result) => {
+          if (result.value) {
+            thisGraph.bodyloader(true, true);
+            var fail = function() {
+              thisGraph.myalert("Whoops", "There was an error, please try again later");
+            }
+            $.ajax({
+               url: "loader.php",
+               method: "POST",
+               dataType: "json",
+               data: {
+                 action: "clone",
                  id: thisGraph.mapId
                },
                error: fail,
@@ -2089,8 +2137,8 @@ document.onload = (function(d3, undefined){
         },
         arrow_width_update: function() {
           var width = $("#projectArrowWidth").slider("value");
-          var shadowWidth = (width*2);
-          if (shadowWidth<10) shadowWidth = 10;
+          var shadowWidth = (width*3);
+          if (shadowWidth<15) shadowWidth = 15;
           $("body").append("<style>path.link { stroke-width: "+width+"px} .pathsShadow path.link { stroke-width: "+shadowWidth+"px}</style>");
         },
         colourTooDark: function(hexcolor){
@@ -2146,7 +2194,6 @@ document.onload = (function(d3, undefined){
           for (var i in fields) {
             out[i] = fields[i](i);
           }
-          db(out);
           return out;
         }
       }
@@ -2372,7 +2419,7 @@ document.onload = (function(d3, undefined){
                 total += d.scale*1 || 1 ;
               });
               var average = total / thisGraph.getSelected().size();
-              return Math.round(average*4)/4;
+              return Math.round(average*10)/10;
             }
           case "y":
           case "x":
@@ -2474,7 +2521,9 @@ document.onload = (function(d3, undefined){
             sliders: [
               {
                 default: function() {
-                  return self._groupValue("width") / 2;
+                  var r = self._groupValue("width") / 2;
+                  if (r<50) r = 50;
+                  return r;
                 },
                 start: 0,
                 end: 1200,
@@ -2492,13 +2541,13 @@ document.onload = (function(d3, undefined){
                 }
               },
               {
-                default: 1/2,
-                start: 1/2,
+                default: 0.5,
+                start: 0.5,
                 end: 3,
                 step: 0.01,
                 prompt: "Curve",
                 label: function(d) {
-                  d += 0.5; //let's make circle = 1, instead of the actual equation variable 0.5
+                  d += 0.5; //let's make circle = 1, instead of the actual equation variable 0.5, looks nicer
                   d = Math.round(d*100)/100;
                   if (d===1) return d+" (circle)";
                   return d;
@@ -2507,8 +2556,33 @@ document.onload = (function(d3, undefined){
             ],
             text: "Circle / Curve",
             updateCenterOnDrag: true,
-            position: function() {
-              var ds = thisGraph.getSelected();
+            help: function() {
+              thisGraph.myalert("Circle Example", "<div style='font-size: 15px;text-align:left;'>This tool allows you to make all kinds of curve & circle. If you would like a curve to be less rounded, simply increase the Curve value, then increase the Radius. <br><br> The first time you use the tool on a set of nodes, it will order them around the circle from whatever node is highest up on the screen (y-axis position). Afterwards, it will order them based on whichever node is closest; so if you wish two nodes to replace eachother's positions, just swap their positions manually, and then reopen the Circle tool.  If you ever wish to go back to positioning by Vertical Position, just click Forget before you use the circle tool. <br> </div> <img src='images/circlehelp_small.gif' style='width:100%;margin-top:15px'>");
+            },
+            position: function( fromDropdown ) {
+
+              var nodes = thisGraph.getSelected();
+
+              var firstTimePositioningSet = !self._shaper.config.current();
+              //if (fromDropdown) alert(firstTimePositioningSet);
+              var verticalPositioning = fromDropdown && firstTimePositioningSet;
+
+              /* Special case, do vertical ordering if never ordered before*/
+              if (verticalPositioning) {
+                var d = nodes.data()[0], min = d, max = d;
+                nodes.each(function(d) {
+                  if (d.x < min.x) min = d;
+                  else if (d.x > max.x) max = d;
+                });
+                var avg_y = thisGraph.info._groupValue("y");
+                var left_distance = (Math.abs(min.y-avg_y));
+                var right_distance = (Math.abs(max.y-avg_y))
+                var left_curve = left_distance < right_distance;
+                var order = left_curve || max.x-min.x<100 ? d3.descending : d3.ascending ;
+                nodes = nodes.sort(function(a, b) {
+                  return order(a["y"], b["y"]);
+                });
+              }
 
               var center_x = self._shaper.avg_x;
               var center_y = self._shaper.avg_y;
@@ -2519,11 +2593,13 @@ document.onload = (function(d3, undefined){
 
               var curve = self._shaper.sliders.get("circle", 2).val();
 
-              var numNodes = ds.size();
+              var numNodes = nodes.size();
               var width = (radius * 2) + 50,
                   height = (radius * 2) + 50,
-                  angle, i = 0;
+                  angle, node, i = 0;
               var positions = [];
+
+              var order = fromDropdown ? [] : self._shaper.lastNodesOrder;
 
               for (var i=0; i<numNodes; i++) {
                 angle = angle_start + (i / (numNodes*curve)) * Math.PI;
@@ -2532,12 +2608,25 @@ document.onload = (function(d3, undefined){
                   x: center_x + (radius * Math.cos(angle)),
                   y: center_y + (radius * Math.sin(angle))
                 }
-                //Find closest node to position
-                var result = self._shaper.closestNode(ds, pos);
-                ds = result.list;
-                result.data.x = pos.x;
-                result.data.y = pos.y;
+
+                if (fromDropdown) {
+                  var nodeIndex = verticalPositioning ? 0 : self._shaper.closestNode(nodes, pos); ;
+                  node = nodes.filter(function (d, i) { return i === nodeIndex;});
+                  nodes = nodes.filter(function (d, i) { return i !== nodeIndex;});
+                  order.push(node);
+                } else {
+                  node = order[i];
+                }
+
+                node.each(function(d) {
+                  d.x = pos.x;
+                  d.y = pos.y;
+                });
+
               }
+
+              self._shaper.lastNodesOrder = order;
+
             }
           },
           "horizontal": {
@@ -2572,12 +2661,15 @@ document.onload = (function(d3, undefined){
           out.push( self._shaper.options.build() );
           out.push( self._shaper.sliders.build() );
           $("#shaperOptions").append(out);
+          self._shaper.forget.init();
+          self._shaper.help.init();
         },
-        update: function() {
+        update: function( fromDropdown ) {
           if (!self._shaper.isActive()) return;
           var data = self._shaper.shapes[ self._shaper.options.val() ];
-          data.position();
+          data.position(fromDropdown);
           self._shaper.config.save();
+          thisGraph.removeCurvesFromNodeSet(thisGraph.getSelected());
           thisGraph.updateGraph();
         },
         config: {
@@ -2597,7 +2689,7 @@ document.onload = (function(d3, undefined){
               c.history[c.currentId()] = out;
               thisGraph.save();
             } else {
-              //Not actively shaping, so just update the average position of the nodes in question, so that they can have the same relative position after dragging (e.g. circle needs to keep it's proper center-point)
+              //Not actively shaping, so just update the average position of the nodes in question, so that they can have the same relative position after dragging (e.g. circle needs to keep its proper center-point)
               for (var i in self._shaper.shapes) {
                 if (self._shaper.shapes[i].updateCenterOnDrag) {
                   var history = c.history[c.currentId(i)];
@@ -2612,11 +2704,14 @@ document.onload = (function(d3, undefined){
               }
             }
           },
+          current: function() {
+            return self._shaper.config.history[ self._shaper.config.currentId() ];
+          },
           load: function() {
-            var c = self._shaper.config;
-            db(self._shaper);
-            var history = c.history[c.currentId()];
-            var sliders = self._shaper.sliders.getAll( self._shaper.options.val() );
+            var history = self._shaper.config.current();
+            var shape = self._shaper.options.val();
+            var sliders = self._shaper.sliders.getAll( shape );
+
             if (history) {
               self._shaper.avg_x = history.center.x;
               self._shaper.avg_y = history.center.y;
@@ -2643,6 +2738,7 @@ document.onload = (function(d3, undefined){
         refresh: function() {
           var show = thisGraph.getSelected().size()>1;
           if (show) {
+            self._shaper.forget.refresh();
             self._shaper.options.reset();
             self._shaper.resetCenter();
           }
@@ -2650,6 +2746,45 @@ document.onload = (function(d3, undefined){
         },
         isActive: function() {
           return thisGraph.getSelected().size()>1 && $("#shaper").is(":visible") && self._shaper.options.val() != self._shaper.options.default.name;
+        },
+        forget: {
+          init: function() {
+            $("#forgetShape").on("click", self._shaper.forget.prompt);
+          },
+          refresh: function( b ) {
+            var has_shape = false;
+            if (b===true || b===false) {
+              has_shape = b;
+            } else {
+              for (var i in self._shaper.shapes) {
+                if (self._shaper.config.history[ self._shaper.config.currentId(i) ]) {
+                  has_shape = true;
+                  break;
+                }
+              }
+            }
+            $("#forgetShape").toggle( has_shape );
+          },
+          prompt: function() {
+            Swal.fire({
+              title: 'Forget Settings?',
+              html: "This set of nodes has previous shape settings. If you choose to forget these settings, they will revert to default settings. For a circle, that means they will be ordered according to their vertical position (i.e. the highest position will be first around the circle).",
+              type:"question",
+              showCancelButton: true,
+              confirmButtonText: "Forget"
+            }).then((result) => {
+              if (result.value) {
+                self._shaper.forget.do();
+              }
+            });
+          },
+          do: function() {
+            for (var i in self._shaper.shapes) {
+              self._shaper.config.history[ self._shaper.config.currentId(i) ] = false;
+            }
+            self._shaper.options.change();
+            self._shaper.forget.refresh(false);
+          }
         },
         resetCenter: function() { /*mainly for circle - since rotating gives a new average center depending on positions of nodes, so isn't steady*/
           self._shaper.avg_x = self._groupValue("x");
@@ -2662,21 +2797,15 @@ document.onload = (function(d3, undefined){
           self._shaper.config.save();
         },
         closestNode: function(nodes, pos) {
-          var shortest, node, data;
-          nodes.each(function(d) {
+          var shortest, index;
+          nodes.each(function(d, i) {
             var distance = Math.pow(d.x-pos.x, 2) + Math.pow(d.y-pos.y, 2); //square rooting unecessary
             if (typeof shortest=="undefined" || distance<shortest) {
               shortest = distance;
-              node = this;
-              data = d;
+              index = i;
             }
           });
-          return {
-            list: nodes.filter(function() {
-              return (this!=node);
-            }),
-            data: data
-          }
+          return index;
         },
         straightLinePositioner: function( dir ) { /* x or y*/
           var ds = thisGraph.getSelected();
@@ -2747,9 +2876,27 @@ document.onload = (function(d3, undefined){
           },
           change: function() {
             thisGraph.animation();
-            self._shaper.sliders.select( self._shaper.options.val() );
-            self._shaper.config.load();
-            self._shaper.update();
+            self._shaper.sliders.select( self._shaper.options.val() ); //show relevant sliders
+            self._shaper.config.load(); //load previous data, or set to default
+            self._shaper.help.refresh();
+            self._shaper.update(true);
+          }
+        },
+        help: {
+          init: function() {
+            $("#shaperHelp").on("click", self._shaper.help.do);
+            self._shaper.help.refresh();
+          },
+          refresh: function() {
+            var shape = self._shaper.options.val();
+            var shape_det = self._shaper.shapes[ shape ];
+            var show = !!shape_det && !!shape_det.help;
+            $("#shaperHelp").toggle( show );
+          },
+          do: function() {
+            var shape = self._shaper.options.val();
+            var shape_det = self._shaper.shapes[ shape ];
+            shape_det.help();
           }
         },
         sliders: {
@@ -2938,7 +3085,7 @@ document.onload = (function(d3, undefined){
       html: text,
       type: icon
     }).then((result) => {
-      if (callback) callback();
+      if (callback) callback(result);
     });
   }
 

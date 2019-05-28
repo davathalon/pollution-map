@@ -17,9 +17,8 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
 <html>
   <head>
     <title>Desmog | Map Editor</title>
-    <link rel="stylesheet" href="static/graph-creator.css" />
+    <link rel="stylesheet" href="static/main.css" />
     <link rel="stylesheet" href="static/jquery-ui.css">
-    <link rel="stylesheet" href="static/main.css">
     <style>
       html, body {
         font-family:arial,sans-serif;
@@ -416,7 +415,9 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
           padding: 5px;
         }
         #advancedOptions .list > var {
-          margin-right:12px;
+          margin-right:10px;
+          margin-bottom:6px;
+          display:inline-block;
         }
       </style>
 
@@ -510,7 +511,7 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
                   <li>The image used for social-media will be however you leave the view to the right (small=blurry).</li>
                 </ul>
               </div>
-              <input id="finalSave" class="myButton" type="button" value="Publish this Map">
+              <input id="finalSave" class="myButton" type="button" value="Save" style="padding:6px 30px">
               <input id="finalSaveCancel" class="myButton grayscale" type="button" value="Cancel">
             </div>
           </div>
@@ -559,8 +560,9 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
               <div class="subtitle" style="margin-bottom:8px">
                 Advanced Options:
               </div>
-              <div class="list" style="font-size:13px">
-                <var id="graphDelete">Delete Map</var>
+              <div class="list" style="font-size:13px;margin-bottom:-6px">
+                <var id="graphDelete">Delete</var>
+                <var id="cloneMap">Clone</var>
                 <var id="invertLogo">Invert Logo</var>
                 <var id="guidelines">Shortcuts</var>
               </div>
@@ -623,6 +625,8 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
           <div id="shaper" style="margin-top:25px">
             <div class="subtitle" style="margin-bottom:9px">
               Select a Shape
+              <img id="shaperHelp" class="help" src="images/help.png">
+              <var id="forgetShape" style="float:right;padding-top:5px;font-size:11px">Forget Settings</var>
             </div>
             <style>
               #shaperOptions select {
@@ -672,7 +676,7 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
     <script src="static/d3.v4.js" charset="utf-8"></script>
     <script src="static/LsDataSource.js"></script>
     <script src="static/jscolor.js"></script>
-    <script src="static/graph-creator-dv4.js?v=2"></script>
+    <script src="static/main.js"></script>
     <script src="static/dom-to-image.js"></script>
 
     <script>
@@ -751,7 +755,7 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
         </div>
         <b>Zooming</b>
         <div>
-          You can use your mouse-wheel or trackpack to zoom in and out. You can also double-click to zoom-in.
+          You can use your mouse-wheel or trackpack to zoom in and out.
         </div>
       </div>
     </div>
