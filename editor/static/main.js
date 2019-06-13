@@ -3,8 +3,6 @@ document.onload = (function(d3, undefined){
 
   var GraphCreator = function(){}
 
-  /**** Static Functions ****/
-
   GraphCreator.prototype.init = function(id, preview) {
 
     var thisGraph = this;
@@ -37,7 +35,7 @@ document.onload = (function(d3, undefined){
       lastKeyDown: -1,
       shiftNodeDrag: false,
       selectedText: null,
-      currentTargetNode: null // when mouseover set the current targetNode
+      currentTargetNode: null
     };
 
     thisGraph.overlay = thisGraph.Overlay();
@@ -97,7 +95,15 @@ document.onload = (function(d3, undefined){
       .append("circle")
     	.attr("cx", 0)
     	.attr("cy", 0)
-    	.attr("r", 49)
+    	.attr("r", 50);
+
+    thisGraph.svg.append("clipPath")
+    	.attr("id", "square-clip")
+      .append("rect")
+    	.attr("x", -50)
+    	.attr("y", -50)
+    	.attr("width", 100)
+      .attr("height", 100);
 
     thisGraph.svgG = thisGraph.svg.append("g").classed(thisGraph.consts.graphClass, true);
 
@@ -109,76 +115,59 @@ document.onload = (function(d3, undefined){
     if (!thisGraph.userView) {
       thisGraph.brush = thisGraph.buildBrush();
     }
+
     thisGraph.svgG.append("g").attr('class', 'paths');
     thisGraph.svgG.append("g").attr('class', 'pathsShadow');
     thisGraph.svgG.append("g").attr('class', 'circles');
 
+    thisGraph.drag = d3.drag()
+      .subject(function(d){
+         return {x: d.x, y: d.y};
+      })
+      .on("drag", function(d){
+        if (thisGraph.userView) return;
+        thisGraph.state.justDragged = true;
+        thisGraph.dragmove.call(thisGraph, d, d3.select(this));
+      })
+      .on("end", function(d) {
+        thisGraph.state.mouseDownLink = null;
+        if (!d.source) {
+          thisGraph.circleMouseUp.call(thisGraph, d3.select(this), d);
+        }
+      });
 
-    /*Node dragging*/
-
-      thisGraph.drag = d3.drag()
-          .subject(function(d){
-             return {x: d.x, y: d.y};
-          })
-          .on("start", function(d){
-            //console.log('Drag started :', d);
-            //thisGraph.circleMouseUp.call(thisGraph, d3.select(this), d);
-          })
-          .on("drag", function(d){
-             //console.log('Draged beginn :', args);
-            if (thisGraph.userView) return;
-            thisGraph.state.justDragged = true;
-            thisGraph.dragmove.call(thisGraph, d, d3.select(this));
-          })
-          .on("end", function(d) {
-            thisGraph.state.mouseDownLink = null;
-            if (!d.source) {
-              thisGraph.circleMouseUp.call(thisGraph, d3.select(this), d);
-            }
-          });
-
-
-    // listen for key events
     d3.select(window).on("keydown", function(e){
       thisGraph.svgKeyDown.call(thisGraph);
-    })
-    .on("keyup", function(){
+    }).on("keyup", function(){
       thisGraph.svgKeyUp.call(thisGraph);
     });
+
     thisGraph.svg.on("mousedown", function(d){
-      console.log('svg mouse down');
       closeAllColourPickers();
       thisGraph.removeSelectFromEdge();
       thisGraph.svgMouseDown.call(thisGraph, d);
     });
+
     thisGraph.svg.on("click", function(d){
-      // console.log("svg mouse up");
       thisGraph.svgMouseUp.call(thisGraph, d);
     });
+
     thisGraph.svg.on("dblclick", function(d){
       if (!thisGraph.userView) {
         thisGraph.svgDoubleClick.call(thisGraph, d);
       }
     });
 
-
     //Zoom setup
-    var dragSvg = d3.zoom().scaleExtent([1/4, 4])
+    var dragSvg = d3.zoom().scaleExtent([1/2, 3])
       .on("zoom", function(){
-        console.log('zoom');
-        if (false && d3.event.sourceEvent.shiftKey){
-          // TODO  the internal d3 state is still changing
-          return false;
-        } else {
-          thisGraph.zoomed.call(thisGraph);
-        }
+        thisGraph.zoomed.call(thisGraph);
         return true;
       })
       .on("start", function(){
         $("body").toggleClass("dragging", true);
       })
       .on("end", function(){
-        //console.log('zomme end');
         $("body").toggleClass("dragging", false);
         thisGraph.state.justScaleTransGraph = false;
       });
@@ -189,7 +178,6 @@ document.onload = (function(d3, undefined){
       thisGraph.svg.on("dblclick.zoom", null);
     }
 
-    // listen for resize
     window.onresize = function() {
       thisGraph.updateWindow();
       thisGraph.recenter()
@@ -197,16 +185,18 @@ document.onload = (function(d3, undefined){
 
   }
 
+
   GraphCreator.prototype.recenter = function() {
-  //  if (!this.userView) return;
+    //if (!this.userView) return;
     try {
       var padding = 25;
       var svg_width = $("svg").width();
       var svg_height = $("svg").height();
+
       const box = d3.select("svg").select(".circles").node().getBBox();
         box.x -= padding;
         box.y -= padding;
-        box.width += padding*2; //strange bug, extra right-padding added, need to compensate for this
+        box.width += padding*2;
         box.height += padding*2;
       const scale = Math.min( svg_width / box.width, svg_height / box.height);
       let transform = d3.zoomIdentity;
@@ -214,6 +204,7 @@ document.onload = (function(d3, undefined){
       transform = transform.scale(scale);
       transform = transform.translate(-box.x - box.width / 2, -box.y - box.height / 2);
       this.zoom.transform(this.svg, transform);
+      this.zoom.scaleExtent([Math.min(1/2, scale), 3])
     } catch(err){}
   }
 
@@ -245,20 +236,23 @@ document.onload = (function(d3, undefined){
       start: function() {
         $("body").toggleClass("brushing", true);
         thisGraph.removeSelectFromEdge();
+        thisGraph.circles.each(function(d) {
+          d.previouslySelected = d3.select(this).classed("selected");
+        });
       },
       show: function(b) {
         var in_brush_mode = b!==false;
         $("body").toggleClass("brush", in_brush_mode);
         thisGraph.state.ctrlDown = in_brush_mode;
         self.brush.call(self.brusher.extent(function() {
-          return b===false ? [[0,0], [0,0]] : [[-10000,-10000], [10000,10000]];
+          return b===false ? [[0,0], [0,0]] : [[-15000,-15000], [15000,15000]];
         }));
       },
       go: function() {
         if (d3.event.sourceEvent.type !== "end") {
           var selection = d3.event.selection;
           thisGraph.setSelected(thisGraph.circles, function(d) {
-            var s = d3.select(this).classed("selected") ||
+            var s = d.previouslySelected ^
                 (selection != null
                 && selection[0][0] <= d.x && d.x < selection[1][0]
                 && selection[0][1] <= d.y && d.y < selection[1][1]);
@@ -398,7 +392,7 @@ document.onload = (function(d3, undefined){
     });
   }
 
-  // call to propagate changes to graph
+
   GraphCreator.prototype.updateGraph = function(){
 
     var thisGraph = this,
@@ -408,17 +402,13 @@ document.onload = (function(d3, undefined){
     var d3Path = d3.select("svg").select(".paths").selectAll("path");
     thisGraph.paths = d3Path.data(thisGraph.edges, function(d){
       return String(d.source.id) + "+" + String(d.target.id);
-    });
+    })
 
     var d3PathShadow = d3.select("svg").select(".pathsShadow").selectAll("path");
     thisGraph.pathsShadow = d3PathShadow.data(thisGraph.edges, function(d){
       return String(d.source.id) + "+" + String(d.target.id);
     });
 
-
-    // thisGraph.paths = thisGraph.paths.data(thisGraph.edges, function(d){
-    //   return String(d.source.id) + "+" + String(d.target.id);
-    // });
     var paths = thisGraph.paths;
     var pathsShadow = thisGraph.pathsShadow;
 
@@ -435,6 +425,9 @@ document.onload = (function(d3, undefined){
       .append("path")
       .classed("link", true)
       .attr("d", this.edge_svg)
+      .attr("id", function(d) {
+        return "PathShadow_"+d.source.id + "_" + d.target.id;
+      })
       .on("mouseover", function(d) {
         thisGraph.getSisterPath(d).classed("hovered", true);
       })
@@ -444,8 +437,12 @@ document.onload = (function(d3, undefined){
       .on("mousedown", function(d){
         thisGraph.pathMouseDown.call(thisGraph, thisGraph.getSisterPath(d), d);
       })
+      .on("dblclick", function(d){ //remove curve from dblclicked line
+        d.curve = null;
+        d.info.setWidth(null);
+        thisGraph.updateGraph();
+      })
       .on("mouseup", function(d){
-        console.log("path mouse up : ",  thisGraph.getSisterPath(d).node());
         state.mouseDownLink = null;
       }).call(thisGraph.drag);
 
@@ -458,6 +455,12 @@ document.onload = (function(d3, undefined){
 
     pathsShadow
       .attr("d", this.edge_svg);
+
+    paths.each(function(d) {
+      if (d.width) {
+        d.info.setWidth(d.width);
+      }
+    });
 
     // remove old links
     paths.exit().remove();
@@ -478,24 +481,20 @@ document.onload = (function(d3, undefined){
       .attr("id", function(d){return "Node"+d.id})
       .attr("transform", thisGraph.nodeTransform)
       .on("mouseover", function(d){
-        console.log('Circle mouseover ', state.shiftNodeDrag);
         state.currentTargetNode = d;
         if (state.shiftNodeDrag){
           d3.select(this).classed(consts.connectClass, true);
-          console.log('circle Keyset :', d, state.currentTargetNode);
         }
       })
       .on("mouseout", function(d){
         d3.select(this).classed(consts.connectClass, false);
       })
       .on("mousedown", function(d){
-        console.log('circle mousedown :', this, d);
         closeAllColourPickers();
         thisGraph.circleMouseDown.call(thisGraph, d3.select(this), d);
         thisGraph.moveToFront(d);
       })
       .on("mouseup", function(d){
-        console.log('circle mouseup :', this, d);
         thisGraph.circleMouseUp.call(thisGraph, d3.select(this), d);
       })
       .call(thisGraph.drag);
@@ -503,6 +502,10 @@ document.onload = (function(d3, undefined){
     //Circles have a black background, so that the opacity effect works on the coloured circle above it. No darkness/filters possible on svg
     newGs.append("circle")
       .attr("r", String(consts.nodeRadius))
+      .attr("fill", "black");
+
+    newGs.append("rect")
+      .attr("x", -50).attr("y", -50).attr("width", 100).attr("height", 100)
       .attr("fill", "black");
 
     newGs.append("svg:image")
@@ -526,9 +529,34 @@ document.onload = (function(d3, undefined){
       return d.bg_color ? d.bg_color : (d.image ? "transparent" : "#f6fbff");
     }).attr("r", String(consts.nodeRadius));
 
+    newGs.append("rect").classed("over", true).attr("fill", function(d) {
+      return d.bg_color ? d.bg_color : (d.image ? "transparent" : "#f6fbff");
+    }).attr("x", -50).attr("y", -50).attr("width", 100).attr("height", 100);
+
+
     newGs.filter(function(d) {
       return !d.image_mode; //!!d.bg_color;
-    }).classed("clr", true);
+    })
+    .classed("clr", true)
+    .classed("white_text", function(d) {
+      return thisGraph.tooDark(d.bg_color);
+    });
+
+    newGs.filter(function(d) { //text permanence
+      return typeof d.tp === "undefined" ? false : !!d.tp;
+    }).classed("always_text", true);
+
+    newGs.filter(function(d) { //hide border
+      return typeof d.hb === "undefined" ? false : !!d.hb;
+    }).classed("hide_border", true).select("circle");
+
+    newGs.each(function(d) { //other shape nodes
+      if (typeof d.ns !== "undefined" && d.ns!="circle") {
+        var node = d3.select(this)
+        node.classed(d.ns, true);
+        node.select("image").attr("clip-path", "url(#"+d.ns+"-clip)" );
+      }
+    });
 
     newGs.each(function(d){
       thisGraph.insertTitleLinebreaks(d3.select(this), d.title);
@@ -536,7 +564,7 @@ document.onload = (function(d3, undefined){
 
     // remove old nodes
     thisGraph.circles.exit().remove();
-    thisGraph.save();
+    //thisGraph.save();
 
     this.info.update(); //often called after deleteNode
 
@@ -567,30 +595,33 @@ document.onload = (function(d3, undefined){
   /**** Function for the path mouse evnet  ****/
 
   GraphCreator.prototype.pathPopup = function(d) {
+    var thisGraph = this;
     var html = $("#hidden #PathFeedback").clone(true);
     html.find(".round:first-child").text(d.source.title);
     html.find(".round:last-child").text(d.target.title);
     var list = html.find(".roles");
     d.info.list.forEach(function(p) {
       if (!$.trim(p.label)) return;
-      var out = $("<div>").append(p.label);
+      var out = $("<div>").append( thisGraph.linkify(p.label) );
       if (p.arrow==1) out.append('<img src="editor/images/right.svg" class="left">');
       if (p.arrow==2) out.append('<img src="editor/images/left.svg" class="right">');
       list.append(out);
     })
+    //html.click(Swal.close);
     Swal.fire({
-      //title: 'Relationship',
+      title: 'Relationship',
       html: html.get(0),
-      //showCloseButton: true,
-      showConfirmButton: false,
+      showCloseButton: true,
+      showConfirmButton: true,
       customClass: "nopadding"
     });
   }
 
   GraphCreator.prototype.positionNodeImages = function(images) {
     var thisGraph = this;
+    var default_dim = {width:100, height:100};
     images.attr("x", function(d) {
-      var i = d.dimensions, r = thisGraph.consts.nodeRadius;
+      var i = d.dimensions || default_dim, r = thisGraph.consts.nodeRadius;
       if (i.width > i.height) {
         return - (i.width * r)/i.height;
       } else {
@@ -598,7 +629,7 @@ document.onload = (function(d3, undefined){
       }
     })
     .attr("y", function(d) {
-      var i = d.dimensions, r = thisGraph.consts.nodeRadius;
+      var i = d.dimensions || default_dim, r = thisGraph.consts.nodeRadius;
       if (i.width < i.height) {
         return - (i.height * r)/i.width;
       } else {
@@ -606,7 +637,7 @@ document.onload = (function(d3, undefined){
       }
     })
     .attr("height", function(d) {
-      var i = d.dimensions, r = thisGraph.consts.nodeRadius;
+      var i = d.dimensions || default_dim, r = thisGraph.consts.nodeRadius;
       if (i.width < i.height) {
         return (i.height * r * 2)/i.width;
       } else {
@@ -614,7 +645,7 @@ document.onload = (function(d3, undefined){
       }
     })
     .attr("width", function(d) {
-      var i = d.dimensions, r = thisGraph.consts.nodeRadius;
+      var i = d.dimensions || default_dim, r = thisGraph.consts.nodeRadius;
       if (i.width > i.height) {
         return (i.width * r * 2)/i.height;
       } else {
@@ -655,9 +686,6 @@ document.onload = (function(d3, undefined){
   }
 
 
-  /**** Function for the circle mouse evnet  ****/
-
-  // mousedown on node
   GraphCreator.prototype.circleMouseDown = function(d3node, d){
 
     var thisGraph = this,
@@ -683,11 +711,11 @@ document.onload = (function(d3, undefined){
       }
       text += "</em>";
       if (d.blurb.summary) {
-        text += "<span>"+d.blurb.summary+"</span>";
+        text += "<span>"+this.linkify(d.blurb.summary)+"</span>";
       }
     }
     text += "</div>";
-    this.myalert("<div style='color:#0164b3'>"+d.title+"</div>", text);
+    this.myalert("<div style='color:#0164b3'>"+d.title+"</div>", text, false, false, true);
   }
 
   // mouseup on nodes
@@ -705,16 +733,11 @@ document.onload = (function(d3, undefined){
     var mouseDownNode = state.mouseDownNode;
     var targetNode = state.currentTargetNode;
 
-
-
-    console.log('Circle mouseup : ', targetNode, mouseDownNode );
-
     if (!mouseDownNode) return;
 
     thisGraph.dragLine.classed("hidden", true);
 
     if (mouseDownNode !== targetNode){
-      // we're in a different node: create new edge for mousedown edge and add to graph
 
       var edge = thisGraph.edge_master.addSingle({
         source: mouseDownNode.id,
@@ -729,7 +752,7 @@ document.onload = (function(d3, undefined){
       // we're in the same node
       if (thisGraph.definitelyDragged(d)) {
         state.justDragged = false;
-        thisGraph.save(); //node was moved, trigger saving
+        //thisGraph.save(); //node was moved, trigger saving
       } else {
 
         thisGraph.removeSelectFromEdge(true);
@@ -787,11 +810,6 @@ document.onload = (function(d3, undefined){
     this.spliceLinksForNode(node);
   };
 
-/**************************************************************************
-
-    Function management of the selected status of each circles and edges
-
-**************************************************************************/
 
   GraphCreator.prototype.definitelyDragged = function(d) {
     if (this.state.justDragged) {
@@ -803,34 +821,27 @@ document.onload = (function(d3, undefined){
     return false;
   }
 
+
   GraphCreator.prototype.replaceSelectEdge = function(d3Path, edgeData){
-    console.log(" replace selected edge ");
     var thisGraph = this;
     d3Path.classed(thisGraph.consts.selectedClass, true);
     thisGraph.removeSelectFromEdge(true);
     thisGraph.state.selectedEdge = edgeData;
-  };
+  }
+
 
   GraphCreator.prototype.removeSelectFromEdge = function( anotherPanelOpening ){
     var thisGraph = this;
     if (!thisGraph.state.selectedEdge) return;
     if (!anotherPanelOpening) thisGraph.overlay.hide();
-    console.log(" remove select state from edge ");
     var d3Path = d3.select("svg").select(".paths").selectAll("path");
     d3Path.filter(function(cd){
       return cd === thisGraph.state.selectedEdge;
     }).classed(thisGraph.consts.selectedClass, false);
     thisGraph.state.selectedEdge = null;
-  };
+  }
 
 
-
-/**************************************************************************
-
-             Function for remove selected Node and Edges
-
-**************************************************************************/
-   // remove edges associated with a node
   GraphCreator.prototype.spliceLinksForNode = function(node) {
     var thisGraph = this,
         toSplice = thisGraph.edges.filter(function(l) {
@@ -840,20 +851,11 @@ document.onload = (function(d3, undefined){
       thisGraph.edges.splice(thisGraph.edges.indexOf(l), 1);
       thisGraph.edge_master.kill(l);
     });
-  };
+  }
 
 
-
-
-/**************************************************************************
-
-                Function for the circle Text
-
-**************************************************************************/
-
-  /* insert svg line breaks: taken from http://stackoverflow.com/questions/13241475/how-do-i-include-newlines-in-labels-in-d3-charts */
   GraphCreator.prototype.insertTitleLinebreaks = function (gEl, title) {
-    var words = title.split(/\s+/g),
+    var words = title.trim().split(/\s+/g),
         nwords = words.length;
         gEl.selectAll("text").remove();
 
@@ -864,25 +866,26 @@ document.onload = (function(d3, undefined){
       if (x==0) el.classed("blurred", true);
       for (var i = 0; i < words.length; i++) {
         var tspan = el.append('tspan').text(words[i]);
+        if (words[i].length>=11) tspan.classed("small_text", true);
         if (i > 0)
           tspan.attr('x', 0).attr('dy', '15');
       }
     }
 
-  };
+  }
 
-   /**** Function for the circle drag ****/
 
   GraphCreator.prototype.getSelected = function() {
     return d3.select("svg").select(".circles").selectAll("."+this.consts.selectedClass);
   }
+
 
   GraphCreator.prototype.dragmove = function(d, d3node) {
     var thisGraph = this;
 
     if (thisGraph.state.mouseDownLink) {
 
-      thisGraph.updateEdgeCurve(d, d3node, d3.mouse(thisGraph.svgG.node()));
+      if (!thisGraph.state.ctrlDown) thisGraph.updateEdgeCurve(d, d3node, d3.mouse(thisGraph.svgG.node()));
 
     } else if (thisGraph.state.shiftNodeDrag){
 
@@ -911,6 +914,7 @@ document.onload = (function(d3, undefined){
     }
   };
 
+
   GraphCreator.prototype.removeCurvesFromNode = function(d) {
     this.edges.forEach(function(e) {
       if (e.source === d || e.target === d) {
@@ -919,6 +923,7 @@ document.onload = (function(d3, undefined){
     });
   }
 
+
   GraphCreator.prototype.removeCurvesFromNodeSet = function(nodes) {
     var thisGraph = this;
     nodes.each(function(d) {
@@ -926,7 +931,7 @@ document.onload = (function(d3, undefined){
     });
   }
 
-  /* select all text in element: taken from http://stackoverflow.com/questions/6139107/programatically-select-text-in-a-contenteditable-html-element */
+
   GraphCreator.prototype.selectElementContents = function(el) {
     var range = document.createRange();
     range.selectNodeContents(el);
@@ -936,32 +941,24 @@ document.onload = (function(d3, undefined){
   };
 
 
-/**************************************************************************
-
-              Function for the SVG mouse and key action
-
-**************************************************************************/
-
-
-  // mousedown on main svg
   GraphCreator.prototype.svgMouseDown = function(){
     this.state.graphMouseDown = true;
-  };
-  // dblclick on main svg
+  }
+
+
   GraphCreator.prototype.svgDoubleClick = function(){
-    console.log('svg double click');
     if (d3.event.target.nodeName!="svg") return;
     $("#dclick_prompt").hide();
     this.adder.newNode();
   }
-  // mouseup on main svg
+
+
   GraphCreator.prototype.svgMouseUp = function(){
     if (d3.event.target.nodeName!="svg") return;
     var thisGraph = this, state = thisGraph.state;
     if (!state.ctrlDown) {
       this.clearSelection();
     }
-    console.log('svg mouse up');
     if (state.justScaleTransGraph) {
       // dragged not clicked
       state.justScaleTransGraph = false;
@@ -973,11 +970,9 @@ document.onload = (function(d3, undefined){
     state.graphMouseDown = false;
   };
 
-  // keydown on main svg
+
   GraphCreator.prototype.svgKeyDown = function() {
     if ($("input").is(":focus") || $("textarea").is(":focus")) return;
-
-    console.log('SVG keydown');
 
     var thisGraph = this,
         state = thisGraph.state,
@@ -985,7 +980,6 @@ document.onload = (function(d3, undefined){
 
     if(state.lastKeyDown !== -1) return; // make sure repeated key presses don't register for each keydown
 
-    db(d3.event.keyCode);
     var is_ctrl_key =  (d3.event.keyCode==17 || d3.event.keyCode==91 || d3.event.keyCode==93); //Command key for Mac, Ctrl elsewhere
 
     if (is_ctrl_key) {
@@ -1038,40 +1032,38 @@ document.onload = (function(d3, undefined){
     if (!d3.event.ctrlKey) this.state.ctrlDown = false;
   };
 
-
-
-
-/**************************************************************************
-
-              Function for Window and Zoom Pan
-
-**************************************************************************/
-
-
   GraphCreator.prototype.zoomed = function(){
     this.state.transform = d3.event.transform;
     this.state.justScaleTransGraph = true;
     d3.select("." + this.consts.graphClass)
       .attr("transform", d3.event.transform);
-    this.save();
+    //this.save();
   };
+
+  GraphCreator.prototype.linkify = function(text){
+    return text.replace(/\[(.*?)\]\((.*?)\)/g,'<a href="$2" target="_blank">$1</a>')
+  }
 
   GraphCreator.prototype.updateWindow = function(){
     var docEl = document.documentElement,
         bodyEl = document.getElementsByTagName('body')[0];
     var x = window.innerWidth || docEl.clientWidth || bodyEl.clientWidth;
     var y = window.innerHeight|| docEl.clientHeight|| bodyEl.clientHeight;
+
+    if (this.userView) {
+      y -= $("#mapTitle").outerHeight();
+      $("#zoomInButton, #zoomOutButton, #shareButton").toggle((y>165));
+    }
+
     this.svg.attr("width", x-this.toolbarWidth).attr("height", y);
   };
-
-
-  /**** CUSTOM ****/
 
   GraphCreator.prototype.serverSave = function( screenshot ) {
     var thisGraph = this;
     thisGraph.bodyloader(true);
-    var fail = function() {
-      thisGraph.myalert("Whoops", "There was an error, please try again later");
+    var fail = function(response) {
+      var out = response && response.responseText ? response.responseText : "There was an error, please try again later";
+      thisGraph.myalert("Whoops", out);
     }
     $.ajax({
        url: "loader.php",
@@ -1085,11 +1077,11 @@ document.onload = (function(d3, undefined){
          directUrl: thisGraph.get_project_url(),
          id: thisGraph.mapId || "" //if blank, is new
        },
-       error: function() {
+       error: function(response) {
          if (!navigator.onLine) {
            thisGraph.offlineMessage();
          } else {
-           fail();
+           fail(response);
          }
        },
        success: function(response) {
@@ -1104,7 +1096,7 @@ document.onload = (function(d3, undefined){
            thisGraph.project.build_link();
            $("#graphAdvanced").show();
          } else {
-           fail();
+           fail(response);
          }
        },
        complete: function() {
@@ -1160,7 +1152,7 @@ document.onload = (function(d3, undefined){
     }
     var jsonObj = JSON.parse(data);
     if (!jsonObj) return;
-    db("Loaded", jsonObj);
+    //db("Loaded", jsonObj);
 
     thisGraph.nodes = jsonObj.nodes.filter(function(n) {
       return !n.staging;
@@ -1172,14 +1164,12 @@ document.onload = (function(d3, undefined){
 
     thisGraph.overlay.show(thisGraph.overlay.panel.PROJECT);
 
-    jsonObj.meta.projectTitle = title; //don't let meta get out of sync with file name
+    if (title) jsonObj.meta.projectTitle = title; //don't let meta get out of sync with file name
     thisGraph.project.meta( jsonObj.meta );
 
     if (jsonObj.invertLogo) thisGraph.invertLogo();
 
     if (thisGraph.nodes.length==0) $("#dclick_prompt").show();
-
-    //thisGraph.setViewport(jsonObj.viewport);
 
     thisGraph.updateGraph();
     thisGraph.updateGraph(); //requires twice to make brush work?
@@ -1231,7 +1221,6 @@ document.onload = (function(d3, undefined){
          callback(dataUrl);
        })
        .catch(function (err) {
-         db(err);
          callback(false);
        });
     }
@@ -1269,13 +1258,6 @@ document.onload = (function(d3, undefined){
   GraphCreator.prototype.nodeTransform = function(d) {
     if (!d.scale) d.scale = 1;
     return "translate(" + d.x + "," + d.y + ") scale("+d.scale+" "+d.scale+")";
-  }
-
-  GraphCreator.prototype.setViewport = function(v) {
-    this.state.transform = v;
-    var zoomExtent = d3.zoom().scaleExtent([v.x, v.y]);
-    this.svg.call(zoomExtent.transform, d3.zoomIdentity.translate(v.x, v.y).scale(v.k));
-    d3.select("." + this.consts.graphClass).attr("transform", "translate("+v.x+","+v.y+")scale(" +v.k+ ")");
   }
 
   GraphCreator.prototype.defaultData = function() {
@@ -1470,18 +1452,40 @@ document.onload = (function(d3, undefined){
           }
         },
         getEdgeInfo: function(data, attempts) {
-          LsDataSource.getNodeWithEdges( data.id, thisGraph.getAllNodeIds(), function(response) {
-            if (!response) {
-              if (attempts==3) thisGraph.ajaxError();
-              return setTimeout(function(){ self._staging.getEdgeInfo(data, (++attempts || 2)) }, 1000);
+          var nodes_to_check_relationship_for = thisGraph.getAllNodeIds();
+
+          function chunk(array, size) {
+            const chunked_arr = [];
+            let index = 0;
+            while (index < array.length) {
+              chunked_arr.push(array.slice(index, size + index));
+              index += size;
             }
-            self._staging.data.edges = response.edges;
-            self._staging.proceedIfWaiting();
-          });
+            return chunked_arr;
+          }
+
+          var sections = chunk(nodes_to_check_relationship_for, 250);
+          var num_returned = 0;
+          self._staging.data.edges = [];
+
+          for (var i in sections) {
+            LsDataSource.getNodeWithEdges( data.id, sections[i], function(response) {
+              //LsDataSource.api("entities/"+data.id+"/relationships", function(response) {
+              /*if (!response) {
+                if (attempts==3) thisGraph.ajaxError();
+                return setTimeout(function(){ self._staging.getEdgeInfo(data, (++attempts || 2)) }, 1000);
+              }*/
+              if (response) {
+                self._staging.data.edges = self._staging.data.edges.concat(response.edges);
+              }
+              if (++num_returned==sections.length) {
+                self._staging.proceedIfWaiting();
+              }
+            });
+          }
         },
         getNodeInfo: function(data, attempts) {
           LsDataSource.api( "entities/"+data.id , function(response) {
-            db("NODE RESPONSE", response);
             if (!response) {
               if (attempts==3) thisGraph.ajaxError();
               return setTimeout(function(){ self._staging.getNodeInfo(data, (++attempts || 2)) }, 1000);
@@ -1571,6 +1575,7 @@ document.onload = (function(d3, undefined){
         me.source_id = edge_det.source;
         me.target_id = edge_det.target;
         me.curve = edge_det.curve;
+        me.width = edge_det.width;
         me.is = function( source_id, target_id ) {
           return ( (me.source_id==source_id && me.target_id==target_id)
               || (me.source_id==target_id && me.target_id==source_id)
@@ -1592,6 +1597,13 @@ document.onload = (function(d3, undefined){
           me.list.push(out);
           return out;
         }
+        me.setWidth = function(w) {
+          if (!w) w = 0;
+          me.directEdge.width = w || null;
+          me.node().style("stroke-width", w || "");
+          me.nodeShadow().style("stroke-width", w*3 || "");
+          if (thisGraph.state.selectedEdge) thisGraph.edgeInfo.arrowWidth.set(w);
+        }
         me.remove = function( data ) {
           for (var i in me.list) {
             if (me.list[i]==data) {
@@ -1606,11 +1618,15 @@ document.onload = (function(d3, undefined){
         me.node = function() {
           return d3.select("#Path_"+me.source_id+"_"+me.target_id);
         }
+        me.nodeShadow = function() {
+          return d3.select("#PathShadow_"+me.source_id+"_"+me.target_id);
+        }
         me.init = function() { /*graph connection info*/
           me.directEdge = {
             source: me.findNodeDataById( me.source_id ),
             target: me.findNodeDataById( me.target_id ),
             curve: me.curve,
+            width: me.width,
             info: me
           }
           thisGraph.edges.push( me.directEdge );
@@ -1625,6 +1641,7 @@ document.onload = (function(d3, undefined){
               arrow: me.list[i].arrow
             }
             if (me.directEdge.curve) el.curve = me.directEdge.curve;
+            if (me.directEdge.width) el.width = me.directEdge.width;
             out.push(el);
           }
           return out;
@@ -1862,7 +1879,7 @@ document.onload = (function(d3, undefined){
     var self = {
       init: function() {
         $("#projectTitle").on("keyup", function() {
-          thisGraph.save();
+          //thisGraph.save();
         });
         $("#projectBackgroundURL").on("keyup", function() {
           self.background.image_update();
@@ -1875,7 +1892,7 @@ document.onload = (function(d3, undefined){
           slide: function() {
             setTimeout(function() {
               self.background.opacity_update();
-              thisGraph.save();
+              //thisGraph.save();
             });
           }
         });
@@ -1883,7 +1900,7 @@ document.onload = (function(d3, undefined){
         self.projectArrowColour = new ColourPicker(function() {
           self.background.arrow_colour_update();
         }, function() {
-          thisGraph.save();
+          //thisGraph.save();
         }, "#projectArrowColour");
 
         $("#projectLinkCopy").on("click", function() {
@@ -1894,12 +1911,12 @@ document.onload = (function(d3, undefined){
         $("#projectArrowWidth").slider({
           value: 5,
           min: 1,
-          max: 15,
+          max: 25,
           step: 1,
           slide: function() {
             setTimeout(function() {
-              self.background.arrow_width_update();
-              thisGraph.save();
+              self.background.arrow_width_update(true);
+              //thisGraph.save();
             });
           }
         });
@@ -1919,7 +1936,11 @@ document.onload = (function(d3, undefined){
         self.background.arrow_colour_update();
         self.background.arrow_width_update();
         self.build_link();
-        if (!$("#projectTitle").val()) $("#projectTitle").focus();
+        if (thisGraph.userView) {
+          $("#mapTitle").text( self.meta().projectTitle );
+        } else {
+          if (!$("#projectTitle").val()) $("#projectTitle").focus();
+        }
       },
       build_link: function() {
         if (thisGraph.mapId) {
@@ -1953,7 +1974,7 @@ document.onload = (function(d3, undefined){
           self.ready = true;
         },
         saveStart: function() {
-          thisGraph.save();
+          thisGraph.save(); //Only Save that's really needed
           self.preview.start(true);
         },
         text_update: function(dim) {
@@ -2132,24 +2153,21 @@ document.onload = (function(d3, undefined){
         },
         arrow_colour_update: function() {
           var c = self.projectArrowColour.val();
-          var hover_c = self.background.colourTooDark(c) ? "#777" : d3.rgb(c).darker(2);
-          $("body").append("<style>path.link { stroke: "+c+"} path.link.hovered:not(.selected) { stroke: "+hover_c+"}</style>");
+          var darkness = colourBrightness(c);
+          var hover_c = darkness<50 ? "#777" : ( darkness<100 ? d3.rgb(c).brighter(1.5) : d3.rgb(c).darker(2) );
+          $("body").append("<style>path.link { stroke: "+c+"} path.link.hovered:not(.selected) { stroke: "+hover_c+"} g.conceptG:not(.selected) circle, g.conceptG:not(.selected) rect { stroke: "+c+"}</style>");
         },
-        arrow_width_update: function() {
+        arrow_width_update: function( fromSlider ) {
           var width = $("#projectArrowWidth").slider("value");
           var shadowWidth = (width*3);
-          if (shadowWidth<15) shadowWidth = 15;
+          if (shadowWidth<20) shadowWidth = 20;
           $("body").append("<style>path.link { stroke-width: "+width+"px} .pathsShadow path.link { stroke-width: "+shadowWidth+"px}</style>");
-        },
-        colourTooDark: function(hexcolor){
-          try { //colour input may return non-hex in other browsers
-            var r = parseInt(hexcolor.substr(1,2),16);
-            var g = parseInt(hexcolor.substr(3,2),16);
-            var b = parseInt(hexcolor.substr(4,2),16);
-            var yiq = ((r*299)+(g*587)+(b*114))/1000;
-            return (yiq < 35);
-          } catch(err) {
-            return false;
+          if (fromSlider) {
+            thisGraph.edge_master.list.forEach(function(edge) {
+              if (edge.directEdge.width) {
+                edge.setWidth(null);
+              }
+            });
           }
         }
       },
@@ -2205,19 +2223,19 @@ document.onload = (function(d3, undefined){
     var thisGraph = this;
     var self = {
       show: function() {
-        if (!self.inited) self.init();
         $("#edgeInfo").show();
       },
       set: function( r ) {
+        if (!self.inited) self.init();
         self.relationships = [];
         self.currentEdge = r.info;
         $("#relationshipFromName").text( r.source.title );
         $("#relationshipToName").text( r.target.title );
         $("#relationshipList").html("");
-
         for (var i in r.info.list) {
           self.add( r.info.list[i] );
         }
+        self.arrowWidth.set( r.width );
         thisGraph.overlay.show(thisGraph.overlay.panel.EDGE);
       },
       add: function( n ) {
@@ -2241,6 +2259,46 @@ document.onload = (function(d3, undefined){
           thisGraph.removeSelectFromEdge();
           thisGraph.overlay.hide(); //backup incase edge not clicked cleanly
         });
+        self.arrowWidth.init();
+      },
+      arrowWidth: {
+        init: function() {
+          $("#individualArrowWidthSlider").slider({
+            value: 0,
+            min: 0,
+            max: 25,
+            step: 1,
+            slide: function() {
+              setTimeout(function() {
+                self.arrowWidth.update();
+                //thisGraph.save();
+              });
+            }
+          });
+        },
+        set: function( v ) { //set new ui value
+          if (!v) v = 0;
+          $("#individualArrowWidthSlider").slider("value", v);
+          self.arrowWidth.refresh();
+        },
+        update: function() { //match data to ui
+          self.currentEdge.setWidth( $("#individualArrowWidthSlider").slider("value") );
+          self.arrowWidth.refresh();
+        },
+        refresh: function() { //reflect ui to slider val
+          var width = $("#individualArrowWidthSlider").slider("value");
+          var title = "Arrow Width";
+          var strokeWidth, propertyWidth;
+          if (width===0) {
+            title += " (set to global value)";
+            propertyWidth = null;
+            strokeWidth = "";
+          } else {
+            propertyWidth = width;
+            strokeWidth = width;
+          }
+          $("#individualArrowWidthTitle").text(title+":");
+        }
       },
       find: function(r) {
         for (var i in self.relationships) {
@@ -2262,7 +2320,7 @@ document.onload = (function(d3, undefined){
           me.node.find(".relationshipName").val( r.label ).on("keyup", function() {
             r.label = $(this).val();
           });
-          me.node.find(".relationshipDirection").val( r.arrow ).on("keyup", function() {
+          me.node.find(".relationshipDirection").val( r.arrow ).on("change", function() {
             r.arrow = $(this).val();
           });
           me.node.find(".myButton").on("click", function() {
@@ -2303,13 +2361,54 @@ document.onload = (function(d3, undefined){
       },
       _build: function() {
         if (!self._inited) self._init();
-        $("#info .rightOption").toggle( thisGraph.getSelected().size()==1 );
+        $("#colourRemoveButton, #imageRemoveButton, #alwaysDisplayTextButton, .showNodeBorderButton").toggle( thisGraph.getSelected().size()==1 );
         self._title.refresh();
         self._blurb.refresh();
         self._imageUrl.refresh();
+        self._textPermanence.refresh();
+        self._nodeBorder.refresh();
+        self._nodeShaper.refresh();
         self._scaler.refresh();
         self._colour.refresh();
         self._shaper.refresh();
+      },
+      _nodeBorder: {
+        init: function() {
+          $(".showNodeBorderButton").on("click", function() {
+            thisGraph.getSelected().each(function(d) {
+              d.hb = !d.hb;
+            }).classed("hide_border", function(d) {
+              return d.hb;
+            });
+            thisGraph.clearSelection();
+          });
+        },
+        refresh: function() {
+          if (self.num==1) {
+            var hiding = self._groupValue("hb");
+            $(".showNodeBorderButton").css( "color", hiding ? "#0164b3" : "#aaa" );
+          }
+        }
+      },
+      _textPermanence: {
+        init: function() {
+          $("#alwaysDisplayTextButton").on("click", function() {
+            thisGraph.getSelected().each(function(d) {
+              d.tp = !d.tp;
+              $(this).addClass
+            }).classed("always_text", function(d){
+              return d.tp;
+            });
+            self._textPermanence.refresh();
+          });
+        },
+        refresh: function() {
+          if (self.num==1) {
+            var permanent = self._groupValue("tp");
+            $("#alwaysDisplayTextButton")
+              .css( "color", permanent ? "#0164b3" : "#aaa" );
+          }
+        }
       },
       _title: {
         init: function() {
@@ -2376,6 +2475,47 @@ document.onload = (function(d3, undefined){
           }
         }
       },
+      _nodeShaper: {
+        shapes: [ //option value, display string
+          ["", "Circle"],
+          ["square", "Square"]
+        ],
+        init: function() {
+          self._nodeShaper.shapes.forEach(function(o) {
+            $("#nodeShaper select").append($("<option>").val(o[0]).text(o[1]));
+          });
+          $("#nodeShaper select").on("change", self._nodeShaper.save);
+        },
+        refresh: function() {
+          var shape = self._groupValue("nodeShape");
+          $("#nodeShaper select").val(shape || "");
+          $("#info #nodeShaper").toggle(shape!==false);
+        },
+        save: function() {
+          if (self.num==1) {
+            var shape = $("#nodeShaper select").val();
+            thisGraph.getSelected().each(function(d) {
+              if (d.ns && shape=="") {
+                delete d.ns;
+              } else {
+                d.ns = shape;
+              }
+            });
+            self._nodeShaper.updateShape();
+          }
+        },
+        updateShape: function() {
+          thisGraph.getSelected().each(function(d) {
+            var node = d3.select(this);
+            self._nodeShaper.shapes.forEach(function(o) {
+              if (o[0]) node.classed(o[0], false);
+            });
+            var shape = d.ns ? d.ns : "circle";
+            node.classed(shape, true);
+            node.select("image").attr("clip-path", "url(#"+shape+"-clip)" )
+          });
+        },
+      },
       _blurb: {
         refresh: function() {
           var blurb = self._groupValue("blurb");
@@ -2410,6 +2550,12 @@ document.onload = (function(d3, undefined){
             return single ? firstData.blurb : false ;
           case "image":
             return single ? firstData.image : false ;
+          case "tp":
+            return single ? firstData.tp : false ; //text permanence
+          case "hb":
+            return single ? firstData.hb : false ; //hide border
+          case "nodeShape":
+            return single ? firstData.ns : false ; //node shape
           case "scale":
             if (single) {
               return firstData.scale || 1;
@@ -2458,6 +2604,9 @@ document.onload = (function(d3, undefined){
         self._shaper.init();
         self._blurb.init();
         self._imageUrl.init();
+        self._textPermanence.init();
+        self._nodeBorder.init();
+        self._nodeShaper.init();
         self._inited = true;
       },
       _toggleNodeMode: function() {
@@ -2468,8 +2617,7 @@ document.onload = (function(d3, undefined){
           d3.select(this).classed("clr", !d.image_mode);
           d3.select(this).classed("img", d.image_mode);
           if (d.image_mode) {
-            self._colour.set("#000000");
-
+            self._colour.set("#ccc");
             self._imageUrl.save();
           } else {
             if (d.bg_color) self._colour.picker.val(d.bg_color);
@@ -2482,7 +2630,7 @@ document.onload = (function(d3, undefined){
           self._colour.picker = new ColourPicker(function() {
             self._colour.update();
           }, function() {
-            thisGraph.save();
+            //thisGraph.save();
           }, "#colouriserEdit", "#f6fbff");
         },
         refresh: function() {
@@ -2494,15 +2642,17 @@ document.onload = (function(d3, undefined){
         },
         update: function() {
           var c = self._colour.picker.val();
-          self._colour.list().selectAll("circle.over")
-          .attr("fill", function(d) {
-            d.bg_color = c;
-            return d.bg_color;
-          });
+          var circles = self._colour.list();
+          circles.classed("white_text", thisGraph.tooDark(c));
+          circles.selectAll("circle.over, rect.over")
+            .attr("fill", function(d) {
+              d.bg_color = c;
+              return d.bg_color;
+            });
         },
         set: function(c) {
           /*without updating attribute, e.g. if just setting the background for an image node*/
-          self._colour.list(true).selectAll("circle.over").attr("fill", c);
+          self._colour.list(true).selectAll("circle.over,rect.over").attr("fill", c);
         },
         count: function() {
           var num = 0;
@@ -2526,7 +2676,7 @@ document.onload = (function(d3, undefined){
                   return r;
                 },
                 start: 0,
-                end: 1200,
+                end: 2500,
                 step: 10,
                 prompt: "Radius"
               },
@@ -2556,32 +2706,52 @@ document.onload = (function(d3, undefined){
             ],
             text: "Circle / Curve",
             updateCenterOnDrag: true,
+            extraHtml: function() {
+              var out = $("<div>").attr("id", "circleOptions");
+                var help = $("<var>").text("Help").on("click", function() {
+                  self._shaper.help.do();
+                });
+                var flip = $("<var>").text("Reverse Node Order").on("click", function() {
+                  self._shaper.lastNodesOrder.reverse();
+                  self._shaper.update();
+                });
+              out.append(flip).append(help);
+              return out;
+            },
             help: function() {
-              thisGraph.myalert("Circle Example", "<div style='font-size: 15px;text-align:left;'>This tool allows you to make all kinds of curve & circle. If you would like a curve to be less rounded, simply increase the Curve value, then increase the Radius. <br><br> The first time you use the tool on a set of nodes, it will order them around the circle from whatever node is highest up on the screen (y-axis position). Afterwards, it will order them based on whichever node is closest; so if you wish two nodes to replace eachother's positions, just swap their positions manually, and then reopen the Circle tool.  If you ever wish to go back to positioning by Vertical Position, just click Forget before you use the circle tool. <br> </div> <img src='images/circlehelp_small.gif' style='width:100%;margin-top:15px'>");
+              thisGraph.myalert("Circle Example", "<div id='circleHelpContainer' style='font-size: 15px;text-align:left;'><ul><li>This tool allows you to make all kinds of curve &amp; circle.</li><li>If you would like a curve to be less rounded, simply increase the Curve value, then increase the Radius.</li><li>If you want to predict the ordering of the nodes around the circle, put them in a line first (either vertical or horizontal) using the tool. They will then be placed on the circle in the same left-to-right or top-to-bottom order they had been in.</li></ul> <img src='images/circlehelp_small.gif' style='width:100%;margin-top:5px'></div>");
             },
             position: function( fromDropdown ) {
 
               var nodes = thisGraph.getSelected();
+              var verticalPositioning = false;
 
-              var firstTimePositioningSet = !self._shaper.config.current();
-              //if (fromDropdown) alert(firstTimePositioningSet);
-              var verticalPositioning = fromDropdown && firstTimePositioningSet;
+              if (fromDropdown) {
 
-              /* Special case, do vertical ordering if never ordered before*/
-              if (verticalPositioning) {
-                var d = nodes.data()[0], min = d, max = d;
-                nodes.each(function(d) {
-                  if (d.x < min.x) min = d;
-                  else if (d.x > max.x) max = d;
-                });
-                var avg_y = thisGraph.info._groupValue("y");
-                var left_distance = (Math.abs(min.y-avg_y));
-                var right_distance = (Math.abs(max.y-avg_y))
-                var left_curve = left_distance < right_distance;
-                var order = left_curve || max.x-min.x<100 ? d3.descending : d3.ascending ;
-                nodes = nodes.sort(function(a, b) {
-                  return order(a["y"], b["y"]);
-                });
+                var verticalOrderBy = "y";
+                var firstTimePositioningSet = !self._shaper.config.current();
+
+                if (firstTimePositioningSet) {
+                  verticalPositioning = true;
+                  if (thisGraph.info._groupValue("width") > thisGraph.info._groupValue("height")) {
+                    verticalOrderBy = "x"
+                  }
+                } else {
+                  var isLineX = self._shaper.inALine("x");
+                  var isLineY = self._shaper.inALine("y");
+                  if (isLineX || isLineY) {
+                    verticalPositioning = true;
+                    if (isLineY) {
+                      verticalOrderBy = "x";
+                    }
+                  }
+                }
+                if (verticalPositioning) {
+                  nodes = nodes.sort(function(a, b) {
+                    return d3.descending(a[verticalOrderBy], b[verticalOrderBy]);
+                  });
+                }
+
               }
 
               var center_x = self._shaper.avg_x;
@@ -2661,7 +2831,6 @@ document.onload = (function(d3, undefined){
           out.push( self._shaper.options.build() );
           out.push( self._shaper.sliders.build() );
           $("#shaperOptions").append(out);
-          self._shaper.forget.init();
           self._shaper.help.init();
         },
         update: function( fromDropdown ) {
@@ -2687,7 +2856,7 @@ document.onload = (function(d3, undefined){
               }
               for (var i in sliders) out.sliders.push(sliders[i].val());
               c.history[c.currentId()] = out;
-              thisGraph.save();
+              //thisGraph.save();
             } else {
               //Not actively shaping, so just update the average position of the nodes in question, so that they can have the same relative position after dragging (e.g. circle needs to keep its proper center-point)
               for (var i in self._shaper.shapes) {
@@ -2698,7 +2867,7 @@ document.onload = (function(d3, undefined){
                       x: self._shaper.avg_x,
                       y: self._shaper.avg_y
                     }
-                    thisGraph.save();
+                    //thisGraph.save();
                   }
                 }
               }
@@ -2738,7 +2907,6 @@ document.onload = (function(d3, undefined){
         refresh: function() {
           var show = thisGraph.getSelected().size()>1;
           if (show) {
-            self._shaper.forget.refresh();
             self._shaper.options.reset();
             self._shaper.resetCenter();
           }
@@ -2746,45 +2914,6 @@ document.onload = (function(d3, undefined){
         },
         isActive: function() {
           return thisGraph.getSelected().size()>1 && $("#shaper").is(":visible") && self._shaper.options.val() != self._shaper.options.default.name;
-        },
-        forget: {
-          init: function() {
-            $("#forgetShape").on("click", self._shaper.forget.prompt);
-          },
-          refresh: function( b ) {
-            var has_shape = false;
-            if (b===true || b===false) {
-              has_shape = b;
-            } else {
-              for (var i in self._shaper.shapes) {
-                if (self._shaper.config.history[ self._shaper.config.currentId(i) ]) {
-                  has_shape = true;
-                  break;
-                }
-              }
-            }
-            $("#forgetShape").toggle( has_shape );
-          },
-          prompt: function() {
-            Swal.fire({
-              title: 'Forget Settings?',
-              html: "This set of nodes has previous shape settings. If you choose to forget these settings, they will revert to default settings. For a circle, that means they will be ordered according to their vertical position (i.e. the highest position will be first around the circle).",
-              type:"question",
-              showCancelButton: true,
-              confirmButtonText: "Forget"
-            }).then((result) => {
-              if (result.value) {
-                self._shaper.forget.do();
-              }
-            });
-          },
-          do: function() {
-            for (var i in self._shaper.shapes) {
-              self._shaper.config.history[ self._shaper.config.currentId(i) ] = false;
-            }
-            self._shaper.options.change();
-            self._shaper.forget.refresh(false);
-          }
         },
         resetCenter: function() { /*mainly for circle - since rotating gives a new average center depending on positions of nodes, so isn't steady*/
           self._shaper.avg_x = self._groupValue("x");
@@ -2807,6 +2936,18 @@ document.onload = (function(d3, undefined){
           });
           return index;
         },
+        inALine: function( dir ) {
+          var last, different = false;
+          thisGraph.getSelected().each(function(d) {
+            if (typeof last === "undefined" || d[dir]==last) {
+              last = d[dir];
+            } else {
+              different = true;
+              return false; //actually no way to break out!
+            }
+          });
+          return !different;
+        },
         straightLinePositioner: function( dir ) { /* x or y*/
           var ds = thisGraph.getSelected();
           var size_dimension = dir=="x" ? "width" : "height";
@@ -2817,8 +2958,13 @@ document.onload = (function(d3, undefined){
           var padding = self._shaper.sliders.get(slider_name).val();
           var end_width = 0, j = 0;
 
-          ds = ds.sort(function(a, b) { //keep in closest x order
-             return d3.ascending(a[dir], b[dir]);
+          var orderBy = dir;
+          if (self._shaper.inALine(dir)) { //Can't do in order of 'dir', because all x's or all y's are the same. So do the opposite dir order instead.
+            orderBy = opposite_point;
+          }
+
+          ds = ds.sort(function(a, b) {
+             return d3.ascending(a[orderBy], b[orderBy]);
           });
 
           ds.each(function(d) { //pre-calculate new width to devise initial x-position
@@ -2879,8 +3025,23 @@ document.onload = (function(d3, undefined){
             self._shaper.sliders.select( self._shaper.options.val() ); //show relevant sliders
             self._shaper.config.load(); //load previous data, or set to default
             self._shaper.help.refresh();
+            self._shaper.refreshSettingsFlag();
             self._shaper.update(true);
           }
+        },
+        refreshSettingsFlag: function(b) {
+          var has_shape = false;
+          if (b===true || b===false) {
+            has_shape = b;
+          } else {
+            for (var i in self._shaper.shapes) {
+              if (self._shaper.config.history[ self._shaper.config.currentId(i) ]) {
+                has_shape = true;
+                break;
+              }
+            }
+          }
+          $("#shaperExistingSettings").toggle( has_shape );
         },
         help: {
           init: function() {
@@ -2910,6 +3071,11 @@ document.onload = (function(d3, undefined){
               for (var j in shapes[i].sliders) {
                 sliders.link[i][j] = new sliders.Node(i, shapes[i].sliders[j]);
                 sliders.holder.append( sliders.link[i][j].container );
+              }
+              if (shapes[i].extraHtml) {
+                var extra_info = shapes[i].extraHtml();
+                extra_info.addClass(i);
+                sliders.holder.append(extra_info);
               }
             }
             sliders.select( self._shaper.options.default.name );
@@ -2979,7 +3145,7 @@ document.onload = (function(d3, undefined){
           $("#scaleSlider").slider({
             value: 1,
             min: 0.2,
-            max: 3,
+            max: 4,
             step: 0.1,
             slide: function() {
               setTimeout(function() {
@@ -2988,7 +3154,17 @@ document.onload = (function(d3, undefined){
               });
             }
           });
+          $("#scaleShortcuts var").click(self._scaler.shortcut);
           self._scaler.update();
+        },
+        shortcut: function(e) {
+          var sizes = {
+            S : 0.5,
+            M : 1,
+            L : 2
+          }
+          self._scaler.val( sizes[$(this).text()] );
+          self._scaler.doScale();
         },
         refresh: function() {
           self._scaler.val( self._groupValue("scale") );
@@ -3053,6 +3229,10 @@ document.onload = (function(d3, undefined){
     return out;
   }
 
+  GraphCreator.prototype.tooDark = function(c) {
+    return !c ? false : colourBrightness(c)<100;
+  }
+
   GraphCreator.prototype.bodyloader = function(b, cover) {
     $("body").toggleClass("loading", b!==false);
     if (cover) this.coverblock(b);
@@ -3079,11 +3259,12 @@ document.onload = (function(d3, undefined){
     this.myalert(title, text, "question");
   }
 
-  GraphCreator.prototype.myalert = function(title, text, icon, callback) {
+  GraphCreator.prototype.myalert = function(title, text, icon, callback, close_button) {
     Swal.fire({
       title: title,
       html: text,
-      type: icon
+      type: icon,
+      showCloseButton: close_button
     }).then((result) => {
       if (callback) callback(result);
     });
@@ -3111,6 +3292,17 @@ document.onload = (function(d3, undefined){
     for (var i in CPS) {
       CPS[i].picker.hide();
     }
+  }
+
+  function colourBrightness( c ) { //returns 0 to 255
+    var c = c.substring(1);      // strip #
+    var rgb = parseInt(c, 16);   // convert rrggbb to decimal
+    var r = (rgb >> 16) & 0xff;  // extract red
+    var g = (rgb >>  8) & 0xff;  // extract green
+    var b = (rgb >>  0) & 0xff;  // extract blue
+
+    var luma = 0.2126 * r + 0.7152 * g + 0.0722 * b; // per ITU-R BT.709
+    return luma;
   }
 
   function ColourPicker( onsmallchange, onbigchange, replaceNode, value ) {

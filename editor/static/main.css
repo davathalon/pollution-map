@@ -1,3 +1,7 @@
+body.preview .pathsShadow path.link, body.preview g.conceptG .over {
+  cursor:pointer;
+}
+
 g.conceptG.clr image {
   display:none;
 }
@@ -6,17 +10,56 @@ g.conceptG.img .over {
   fill:transparent !important;
 }
 
-.rightOption {
-  float:right;
-  font-size: 12px;
-  padding-top: 3px;
-  color:#999;
+g.conceptG.clr text.blurred {
+  display:none;
 }
 
-#selectionTitleHolder.multiple div {
+g.conceptG.clr.white_text text {
+  fill: white;
+}
+
+
+g.conceptG.hide_border circle:not(.over), g.conceptG.hide_border rect:not(.over) {
+  r: 49.7;
+}
+g.conceptG.hide_border.always_text circle:not(.over), g.conceptG.hide_border:hover circle:not(.over), g.conceptG.hide_border.always_text rect:not(.over), g.conceptG.hide_border:hover rect:not(.over) {
+  r: 49.7;
+}
+
+g.conceptG.hide_border circle, g.conceptG.hide_border rect {
+  stroke-width:0;
+}
+
+g.conceptG rect, g.conceptG.square circle  {
+  display:none;
+}
+g.conceptG.square rect {
   display:block;
 }
-#selectionTitleHolder.multiple input, #selectionTitleHolder div {
+
+tspan.small_text {
+  font-size:13px;
+}
+
+.leftOption, .rightOption {
+  font-size: 11px;
+  padding-top: 3px;
+  color:#aaa;
+}
+.rightOption {
+  float:right;
+}
+.leftOption {
+  float:left;
+}
+#info .extra_input_options {
+  overflow:hidden;
+  margin-top:4px;
+}
+#selectionTitleHolder.multiple span {
+  display:block;
+}
+#selectionTitleHolder.multiple > div, #selectionTitleHolder span {
   display:none;
 }
 
@@ -24,6 +67,16 @@ g.conceptG.img .over {
   font-weight:bold;
 }
 
+#circleOptions {
+  padding-top:3px;
+}
+#circleOptions var {
+  margin-right:25px;
+}
+
+#circleHelpContainer li {
+  margin-bottom:10px
+}
 
 #guidelinesContent {
   text-align:left;
@@ -95,7 +148,7 @@ marker{
     fill: #333;
 }
 
-g.conceptG circle{
+g.conceptG circle, g.conceptG rect {
     stroke: #777;
     stroke-width: 2px;
 }
@@ -115,7 +168,7 @@ path.link, body.brushing path.link.hovered {
   stroke: #ddd;
 }
 
-g.connect-node circle{
+g.connect-node circle, g.connect-node rect {
     fill: #BEFFFF;
 }
 
@@ -137,10 +190,10 @@ path.link.selected {
 
 
 
-path.link.selected, g.selected circle {
+path.link.selected, g.selected circle, g.selected rect {
     stroke: #1284e4;
 }
-g.selected circle{
+g.conceptG.selected circle, g.conceptG.selected rect {
     stroke-width:7px;
 }
 

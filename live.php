@@ -24,198 +24,10 @@ if (!$isPreview) {
       <meta property="og:image" content="<?=$base_url."/".$img?>" />
     <?}?>
 
-    <link rel="stylesheet" href="editor/static/main.css" />
+    <link rel="stylesheet" href="editor/static/main.css?v=6" />
+    <link rel="stylesheet" href="editor/static/live.css" />
     <link rel="stylesheet" href="editor/static/jquery-ui.css">
-    <style>
-      html, body {
-        font-family:arial,sans-serif;
-        background:white;
-        padding-right: 0 !important; /*swal adds padding to stop shift on scroll-bar*/
-      }
-      body.loading * {
-        cursor:wait !important;
-      }
-      #svgHolder {
-        background:white;
-      }
-      .colourpicker {
-        width:100%;
-        height:40px;
-        box-sizing:border-box;
-        border-radius:3px;
-        border:3px solid white;
-        box-shadow:0 0 1px black;
-      }
-      body.previewHolder #svgHolder, body #previewer, body #project_preview, body.previewHolder #project_non_preview, body #project_pre_save {
-        display:none;
-      }
-      body.previewHolder:not(.preSave) #project_preview {
-        display:block;
-      }
-      body.previewHolder #previewer, body.previewHolder.preSave #project_pre_save {
-        display:block;
-      }
 
-      body.previewHolder {
-        overflow:auto;
-      }
-
-      #projectList > div {
-        border-bottom: 1px solid #ccc;
-        padding:8px;
-        cursor:pointer;
-      }
-      #projectList > div:hover {
-        background:#f3f3f3;
-      }
-
-      @font-face {
-        font-family:Gotham;
-        src: url(editor/static/Gotham-Black.otf);
-      }
-      .logo {
-        font-family:Gotham;
-        font-weight:bold;
-        font-size:42px;
-        text-align:left;
-        color:black;
-      }
-      .logo:after {
-        content:"UK";
-        color:#0065B3
-      }
-      svg {
-          position:relative;
-          z-index:2;
-          /*cursor: move;
-          cursor: grab;
-          cursor: -moz-grab;
-          cursor: -webkit-grab;*/
-      }
-      /*body.dragging svg {
-        cursor: grabbing;
-        cursor: -moz-grabbing;
-        cursor: -webkit-grabbing;
-      }*/
-      body.animate svg g {
-        -webkit-transition: transform 0.3s; /* Safari */
-      }
-      body.animate svg path {
-        -webkit-transition: d 0.3s; /* Safari */
-      }
-      svg path, svg circle, svg image {
-        cursor:default;
-      }
-
-
-      .ui-autocomplete-loading {
-        background: white url("editor/images/load.gif") right 10px center no-repeat;
-      }
-      #node_search_text {
-        padding: 3px;
-        font-size: 24px;
-        border-radius: 4px;
-        width:100%;
-        box-sizing:border-box;
-      }
-      #adder .card .name {
-        margin-bottom:5px
-      }
-      #adder .card img {
-        max-height:200px;max-width:100%;
-        border-radius:3px;
-      }
-      #adder .card.noimg img {
-        display:none;
-      }
-      #dclick_prompt {
-        display:none;
-        position:absolute;
-        top:45%;
-        width:100%;
-        text-align:center;
-        font-size:27px;
-        font-weight:bold;
-        color:#cecece;
-        pointer-events:none;
-        text-shadow:0 0 3px white, 0 0 3px white, 0 0 3px white, 0 0 3px white, 0 0 3px white, 0 0 3px white;
-        z-index:5;
-      }
-      .subtitle {
-        font-size:15px;
-        color:#666;
-      }
-      .myButton {
-      	-moz-box-shadow:inset 0px 1px 0px 0px #54a3f7;
-      	-webkit-box-shadow:inset 0px 1px 0px 0px #54a3f7;
-      	box-shadow:inset 0px 1px 0px 0px #54a3f7;
-      	background:-webkit-gradient(linear, left top, left bottom, color-stop(0.05, #007dc1), color-stop(1, #0061a7));
-      	background:-moz-linear-gradient(top, #007dc1 5%, #0061a7 100%);
-      	background:-webkit-linear-gradient(top, #007dc1 5%, #0061a7 100%);
-      	background:-o-linear-gradient(top, #007dc1 5%, #0061a7 100%);
-      	background:-ms-linear-gradient(top, #007dc1 5%, #0061a7 100%);
-      	background:linear-gradient(to bottom, #007dc1 5%, #0061a7 100%);
-      	filter:progid:DXImageTransform.Microsoft.gradient(startColorstr='#007dc1', endColorstr='#0061a7',GradientType=0);
-      	background-color:#007dc1;
-      	-moz-border-radius:3px;
-      	-webkit-border-radius:3px;
-      	border-radius:3px;
-      	border:1px solid #124d77;
-      	display:inline-block;
-      	cursor:pointer;
-      	color:#ffffff;
-      	font-family:Arial;
-      	font-size:13px;
-      	padding:6px 24px;
-      	text-decoration:none;
-      	text-shadow:0px 1px 0px #154682;
-      }
-      .myButton:hover {
-      	background:-webkit-gradient(linear, left top, left bottom, color-stop(0.05, #0061a7), color-stop(1, #007dc1));
-      	background:-moz-linear-gradient(top, #0061a7 5%, #007dc1 100%);
-      	background:-webkit-linear-gradient(top, #0061a7 5%, #007dc1 100%);
-      	background:-o-linear-gradient(top, #0061a7 5%, #007dc1 100%);
-      	background:-ms-linear-gradient(top, #0061a7 5%, #007dc1 100%);
-      	background:linear-gradient(to bottom, #0061a7 5%, #007dc1 100%);
-      	filter:progid:DXImageTransform.Microsoft.gradient(startColorstr='#0061a7', endColorstr='#007dc1',GradientType=0);
-      	background-color:#0061a7;
-      }
-      .myButton:active {
-      	position:relative;
-      	top:1px;
-      }
-      svg text {
-        font-size:16px;
-        font-weight:bold;
-      }
-      svg .conceptG.img text.blurred {
-        stroke-width:5px;
-        stroke:white;
-        filter:url(#blur);
-        text-shadow:0 0 6px white;
-      }
-      svg .conceptG.img text {
-        visibility:hidden;
-      }
-      body:not(.brushing) svg .conceptG.img:hover text {
-        visibility:visible;
-      }
-      body:not(.brushing) svg .conceptG.img:hover image {
-        opacity:0.75;
-      }
-      body:not(.brushing) g.conceptG.clr:hover circle.over {
-        opacity:0.92;
-      }
-      body.brush .conceptG circle {
-        cursor:cell;
-      }
-      body.brush .conceptG.selected circle {
-        cursor:default;
-      }
-      body.brushing path, body.brushing circle  {
-        cursor: crosshair !important;
-      }
-    </style>
     <script src="editor/static/jquery-1.10.2.js"></script>
     <script src="editor/static/jquery-ui.js"></script>
     <script src="editor/static/sweetalert2.js"></script>
@@ -228,164 +40,7 @@ if (!$isPreview) {
 
     <div style="height:100%">
 
-      <style>
-        #overlay > div {
-          position:fixed;
-          width:300px;height:100%;
-          background:rgba(256,256,256,0.97);
-          z-index:1;
-          box-shadow:2px 0px 5px #999;
-          padding:20px;
-          box-sizing:border-box;
-          overflow-y:auto;
-        }
-        #project input[type=text] {
-          width: 100%;
-          box-sizing: border-box;
-          padding: 3px;
-          font-size: 19px;
-        }
-        #svgHolder, #previewer {
-          margin-left:300px;
-          position:relative;
-        }
-        #svgBackground {
-          position:absolute;
-          top:0;
-          left:0;
-          width:100%;
-          height:100%;
-          background-size:cover;
-          opacity:0.1;
-        }
-        #project .fields > div {
-          margin-bottom:25px;
-        }
-        #previewer {
-          display:none;
-          z-index:10;
-          position:relative;
-        }
-        #piframe > div {
-          width:840px; /*default size*/
-          height:600px;
-        }
-        #piframe iframe {
-          display:block;
-          width:100%;
-          height:100%;
-          border:0;
-          border: 1px solid #444;
-        }
-        #pdimensions {
-          margin-top: 10px;
-          color: #bbb;
-          font-size: 13px;
-          cursor:pointer;
-          display:inline-block;
-        }
-        #previewer #pcover {
-          display:none;
-          position:absolute;
-          left:0;top:0;width:100%;height:100%;
-          z-index:10;
-        }
-        #previewer.dragging #pcover {
-          display:block;
-        }
-
-        body.preview #overlay {
-          display:none !important;
-        }
-        body.preview #svgHolder {
-          margin-left:0;
-        }
-        #svgHolder .logo {
-          font-size: 25px;
-          position: absolute;
-          right: 11px;
-          bottom: 7px;
-          display:none;
-          z-index:100;
-          text-decoration:none;
-        }
-        body.preview #svgHolder .logo {
-          display:block;
-        }
-        @media (max-width: 500px) {
-          #svgHolder .logo {
-            font-size:20px;
-          }
-        }
-        @media (max-width: 350px) {
-          #svgHolder .logo {
-            font-size:14px;
-          }
-        }
-        @media (max-width: 200px) {
-          #svgHolder .logo {
-            visibility:hidden;
-          }
-        }
-        @media (max-height: 165px) {
-          #zoomInButton, #zoomOutButton, #shareButton {
-            display:none;
-          }
-        }
-        #mapActionButtons {
-          position:absolute;top:10px;right:10px;
-          z-index:100
-        }
-        #mapActionButtons > img {
-          width: 17px;
-          background: white;
-          opacity:0.7;
-          padding: 5px;
-          border: 1px solid #999;
-          border-radius: 3px;
-          cursor:pointer;
-        }
-        #mapActionButtons > img:hover {
-          opacity:1;
-        }
-        #mapActionButtons > img:active {
-          margin-bottom:-1px;
-          margin-top:1px;
-        }
-        body.screenshotting #mapActionButtons, body.screenshotting #dclick_prompt {
-          display:none !important;
-        }
-        #screenshotPopup {
-          font-size:14px;
-        }
-        #screenshotPopup img {
-          margin-top:10px;
-          width:100%;
-          display:block;
-        }
-        #blurb textarea {
-          width: 100%;
-          max-width:100%;
-          min-width:100%;
-          box-sizing: border-box;
-          font-size:12px;
-        }
-        .infopopup em {
-          font-style:italic;
-          display:block;
-          margin-bottom:15px;
-          font-size:20px;
-          font-weight:bold
-        }
-        .infopopup span {
-          display:block;
-          overflow-y: auto;
-          font-size: 13px;
-          text-align: left;
-          white-space: pre-wrap;
-          padding: 15px 5px 5px;
-        }
-      </style>
+      <div id="mapTitle">&nbsp;</div>
 
       <div id="svgHolder">
         <div id="dclick_prompt">Double-click to add a Node</div>
@@ -493,21 +148,6 @@ if (!$isPreview) {
             <div class="subtitle" style="margin-bottom:9px">
               Select a Shape
             </div>
-            <style>
-              #shaperOptions select {
-                width:100%;
-                font-size:14px;
-              }
-              #shaperOptions > div > div {
-                margin: 20px 25px 0;
-                font-size: 12px; /*changes slider size*/
-              }
-              #shaperOptions .prompt {
-                margin-bottom:5px;
-                font-size:11px;
-                color:#999;
-              }
-            </style>
             <div id="shaperOptions">
 
             </div>
@@ -533,12 +173,10 @@ if (!$isPreview) {
     <div id="coverBlock" style="display:none;position:fixed;left:0;width:100%;top:0;height:100%;background:black;opacity:0.15;z-index:11"></div>
 
     <script src="editor/static/d3.v4.js" charset="utf-8"></script>
-    <script src="editor/static/LsDataSource.js"></script>
     <script src="editor/static/jscolor.js"></script>
-    <script src="editor/static/main.js"></script>
-    <script src="editor/static/dom-to-image.js"></script>
-    <script src="https://unpkg.com/popper.js@1"></script>
-    <script src="https://unpkg.com/tippy.js@4"></script>
+    <script src="editor/static/main.js?v=6"></script>
+    <script src="editor/static/popper.min.js"></script>
+    <script src="editor/static/tippy.min.js"></script>
     <script>
       $(function() {
         <?
@@ -557,67 +195,11 @@ if (!$isPreview) {
       });
     </script>
 
-    <style>
-      #icons {
-        text-align:center;
-        color:#0a0a0a;
-      }
-      #icons > div, #icons > a  {
-        width:70px;
-        float:left;
-        margin-right:20px;
-        cursor:pointer;
-        display:block;
-        text-decoration:none;
-        color:inherit;
-      }
-      #icons .circle {
-        width:100%;
-        height:70px;
-        border-radius:100px;
-      }
-      #icons .label {
-        margin-top:8px;
-        font-size:14px;
-      }
-      #PathFeedback .round {
-        background:#0164b3;
-        color:white;
-        padding:10px 5px;
-        width:120px;
-        font-weight:bold;
-        display:table-cell;
-        vertical-align:middle
-      }
-      #PathFeedback .roles > div {
-        padding:10px 20px;
-        position:relative;
-      }
-      #PathFeedback .roles > div:nth-child(even) {
-        background:#f2f2f2;
-      }
-      #PathFeedback .roles .right, #PathFeedback .roles .left {
-        position:absolute;
-        top:50%;
-        margin-top:-10px;
-        width:20px;
-      }
-      #PathFeedback .roles .left {
-        left:-7px;
-      }
-      #PathFeedback .roles .right {
-        right:-7px;
-      }
-      .swal2-popup.nopadding {
-        padding:0 !important;
-        pointer-events:none;
-      }
-    </style>
     <div id="hidden" style="display:none">
       <div id="PathFeedback">
-        <div style="display:table;width:100%;">
+        <div style="display:table;width:100%;background:#f3f3f3;">
           <div class="round"></div>
-          <div class="roles" style="display:table-cell">
+          <div class="roles" style="display:table-cell;vertical-align:middle">
 
           </div>
           <div class="round"></div>
