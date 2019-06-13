@@ -20,10 +20,10 @@ g.conceptG.clr.white_text text {
 
 
 g.conceptG.hide_border circle:not(.over), g.conceptG.hide_border rect:not(.over) {
-  r: 49;
+  r: 49.5;
 }
-g.conceptG.hide_border.always_text circle:not(.over), g.conceptG.hide_border:hover circle:not(.over), g.conceptG.hide_border.always_text rect:not(.over), g.conceptG.hide_border:hover rect:not(.over) {
-  r: 49;
+g.conceptG.hide_border.img.always_text circle:not(.over), g.conceptG.hide_border.img:hover circle:not(.over), g.conceptG.hide_border.always_text.img rect:not(.over), g.conceptG.hide_border.img:hover rect:not(.over) {
+  r: 50;
 }
 
 g.conceptG.hide_border circle, g.conceptG.hide_border rect {

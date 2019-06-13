@@ -3144,7 +3144,7 @@ document.onload = (function(d3, undefined){
         init: function() {
           $("#scaleSlider").slider({
             value: 1,
-            min: 0.2,
+            min: 0.3,
             max: 4,
             step: 0.1,
             slide: function() {
