@@ -1901,7 +1901,7 @@ document.onload = (function(d3, undefined){
           self.background.arrow_colour_update();
         }, function() {
           //thisGraph.save();
-        }, "#projectArrowColour");
+        }, "#projectArrowColour", "bbbbbb");
 
         $("#projectLinkCopy").on("click", function() {
           thisGraph.copyToClipboard( thisGraph.get_project_url() );
