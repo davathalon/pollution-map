@@ -283,7 +283,7 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
     <script src="static/d3.v4.js" charset="utf-8"></script>
     <script src="static/LsDataSource.js"></script>
     <script src="static/jscolor.js"></script>
-    <script src="static/main.js?v=6"></script>
+    <script src="static/main.js?v=7"></script>
     <script src="static/dom-to-image.js"></script>
 
     <script>

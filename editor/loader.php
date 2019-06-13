@@ -27,8 +27,8 @@ switch($_POST["action"]) {
       $img = base64_decode( str_replace("data:image/jpeg;base64,", "", $_POST["screenshot"]) );
       file_put_contents("../share/{$id}.jpg", $img);
       $out["scrape_return"] = fb_rescrape($_POST["directUrl"]);
-      die(json_encode($out));
     }
+    die(json_encode($out));
   break;
   case "load":
     $id = mysqli_real_escape_string($mysqli, $_POST["id"]);

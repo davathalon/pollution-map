@@ -2290,7 +2290,7 @@ document.onload = (function(d3, undefined){
           var title = "Arrow Width";
           var strokeWidth, propertyWidth;
           if (width===0) {
-            title += " (set to global value)";
+            title += " (using global value)";
             propertyWidth = null;
             strokeWidth = "";
           } else {
