@@ -197,7 +197,7 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
             <div class="subtitle valign" style="margin-bottom:9px">
               <span id="scaleAmount"></span> <img class="help" src="images/help.png" style="margin-left:4px" onclick="graph.help('Node Scaling', 'This option is <i>not</i> for deciding the size of node that the user sees, because the zoom feature negates that entirely. Rather, this feature is meant for choosing your node size <i>relative</i> to the other nodes. <br><br>Your most common-sized node should have a setting of 1. If that appears too large, then simply zoom out.')">
               <span id="scaleShortcuts">
-                <var class="rightOption" title="Large Node">L</var>
+                <var class="rightOption" title="Large Node" style="margin-right:-4px">L</var>
                 <var class="rightOption" title="Medium Node">M</var>
                 <var class="rightOption" title="Small Node">S</var>
               </span>
