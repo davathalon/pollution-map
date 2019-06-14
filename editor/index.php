@@ -98,11 +98,13 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
                 <ul>
                   <li>This shows the exact view and interactivity the user will get.</li>
                   <li>Drag the sides of the pane to preview different-sized maps.</li>
+                  <li>Save & Publish both store your edits, but Publish additionally builds an image for sharing.</li>
                   <li>The image used for social-media will be however you leave the view to the right (small=blurry).</li>
                 </ul>
               </div>
-              <input id="finalSave" class="myButton" type="button" value="Save" style="padding:6px 30px">
-              <input id="finalSaveCancel" class="myButton grayscale" type="button" value="Cancel">
+              <input id="finalSave" class="myButton" type="button" value="Save" style="padding:6px 19px">
+              <input id="finalPublish" class="myButton" type="button" value="Publish" style="padding:6px 19px">
+              <input id="finalCancel" class="myButton grayscale" type="button" value="Cancel" style="padding:6px 19px">
             </div>
           </div>
           <div id="project_preview">
@@ -283,7 +285,7 @@ if (isset($_COOKIE["logout"]) && $_COOKIE["logout"]==1) {
     <script src="static/d3.v4.js" charset="utf-8"></script>
     <script src="static/LsDataSource.js"></script>
     <script src="static/jscolor.js"></script>
-    <script src="static/main.js?v=7"></script>
+    <script src="static/main.js?v=8"></script>
     <script src="static/dom-to-image.js"></script>
 
     <script>

@@ -1984,8 +1984,10 @@ document.onload = (function(d3, undefined){
           $("body").toggleClass("previewHolder", false);
           thisGraph.recenter();
         },
-        finalSave: function() {
-          if (!self.ready) return;
+        finalPublish: function() {
+          if (!self.ready) {
+            return thisGraph.myalert("Please Wait", "The map-preview must load fully before you publish.");
+          }
           if (!$.trim(thisGraph.project.meta().projectTitle)) {
             self.preview.stop();
             return thisGraph.myalert("Project Title Needed", "You must give your project a title before you can save it.", "warning", function() {
@@ -2027,8 +2029,9 @@ document.onload = (function(d3, undefined){
           $("#graphSave").on("click", self.preview.saveStart);
           $("#exitPreviewMode").on("click", self.preview.stop);
           $("#pdimensions").on("click", self.preview.reset);
-          $("#finalSave").on("click", self.preview.finalSave)
-          $("#finalSaveCancel").on("click", self.preview.stop)
+          $("#finalSave").on("click", function(){ thisGraph.serverSave() });
+          $("#finalPublish").on("click", self.preview.finalPublish);
+          $("#finalCancel").on("click", self.preview.stop)
           $("#graphClose").on("click", function(){
             thisGraph.home();
           });

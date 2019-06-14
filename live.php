@@ -174,7 +174,7 @@ if (!$isPreview) {
 
     <script src="editor/static/d3.v4.js" charset="utf-8"></script>
     <script src="editor/static/jscolor.js"></script>
-    <script src="editor/static/main.js?v=7"></script>
+    <script src="editor/static/main.js?v=8"></script>
     <script src="editor/static/dom-to-image.js"></script>
     <script src="editor/static/popper.min.js"></script>
     <script src="editor/static/tippy.min.js"></script>
